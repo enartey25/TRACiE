@@ -9,7 +9,7 @@ const axios = require('axios');
  */
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
-const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Default: Rachel (clear professional voice)
+const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB'; // Default: Adam (deep, natural, realistic tech narrator)
 
 const WATSON_TTS_APIKEY = process.env.WATSON_TTS_APIKEY || '';
 const WATSON_TTS_URL = process.env.WATSON_TTS_URL || 'https://api.us-south.text-to-speech.watson.cloud.ibm.com';
@@ -43,10 +43,11 @@ async function synthesizeWithElevenLabs(text, voiceId = ELEVENLABS_VOICE_ID) {
     url,
     {
       text,
-      model_id: 'eleven_monolingual_v1',
+      model_id: 'eleven_turbo_v2_5',
       voice_settings: {
         stability: 0.5,
-        similarity_boost: 0.75
+        similarity_boost: 0.8,
+        style: 0.05
       }
     },
     {
@@ -56,7 +57,7 @@ async function synthesizeWithElevenLabs(text, voiceId = ELEVENLABS_VOICE_ID) {
         'Content-Type': 'application/json'
       },
       responseType: 'arraybuffer',
-      timeout: 15000
+      timeout: 20000
     }
   );
 
