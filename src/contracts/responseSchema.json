@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TRACiE Widget Response Schema",
+  "description": "Structured JSON contract between the LLM RAG pipeline and Romel's UIRenderer / Newlove's frontend.",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "chat_response",
+        "code_snippet",
+        "file_tree",
+        "architecture_diagram",
+        "key_value_list",
+        "composite_dashboard",
+        "alert_card"
+      ]
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file_path"],
+        "properties": {
+          "file_path": { "type": "string" },
+          "start_line": { "type": "integer" },
+          "end_line": { "type": "integer" },
+          "snippet": { "type": "string" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "chat_response": {
+      "type": "object",
+      "required": ["type", "content"],
+      "properties": {
+        "type": { "const": "chat_response" },
+        "content": { "type": "string", "description": "Markdown formatted explanation" },
+        "citations": { "$ref": "#/properties/citations" }
+      }
+    },
+    "code_snippet": {
+      "type": "object",
+      "required": ["type", "code", "language", "file_path"],
+      "properties": {
+        "type": { "const": "code_snippet" },
+        "file_path": { "type": "string" },
+        "language": { "type": "string" },
+        "start_line": { "type": "integer" },
+        "end_line": { "type": "integer" },
+        "code": { "type": "string" },
+        "explanation": { "type": "string" }
+      }
+    },
+    "file_tree": {
+      "type": "object",
+      "required": ["type", "root"],
+      "properties": {
+        "type": { "const": "file_tree" },
+        "title": { "type": "string" },
+        "root": {
+          "type": "object",
+          "required": ["name", "type"],
+          "properties": {
+            "name": { "type": "string" },
+            "type": { "type": "string", "enum": ["file", "directory"] },
+            "path": { "type": "string" },
+            "description": { "type": "string" },
+            "children": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/file_tree/properties/root" }
+            }
+          }
+        }
+      }
+    },
+    "architecture_diagram": {
+      "type": "object",
+      "required": ["type", "diagram_source"],
+      "properties": {
+        "type": { "const": "architecture_diagram" },
+        "title": { "type": "string" },
+        "diagram_source": { "type": "string", "description": "Mermaid.js DSL string e.g. graph TD; A-->B" },
+        "caption": { "type": "string" }
+      }
+    },
+    "key_value_list": {
+      "type": "object",
+      "required": ["type", "items"],
+      "properties": {
+        "type": { "const": "key_value_list" },
+        "title": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "type": "string" },
+              "value": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "composite_dashboard": {
+      "type": "object",
+      "required": ["type", "components"],
+      "properties": {
+        "type": { "const": "composite_dashboard" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type"]
+          }
+        }
+      }
+    },
+    "alert_card": {
+      "type": "object",
+      "required": ["type", "message"],
+      "properties": {
+        "type": { "const": "alert_card" },
+        "severity": { "type": "string", "enum": ["info", "warning", "error", "success"] },
+        "title": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

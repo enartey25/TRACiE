@@ -1,0 +1,7 @@
+Hackathon_Task_Breakdown.docx
+SRS_Codebase_AI_Onboarding_Assistant.docx
+node_modules/
+.env
+.env.local
+npm-debug.log*
+public/
