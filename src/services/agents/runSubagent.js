@@ -52,6 +52,30 @@ async function runSubagent({
   const widget = parseAndValidateWidgetJSON(generatedText);
   widget._agent = agentName;
   widget._meta = metadata;
+
+  // If this is an audio briefing subagent, synthesize the actual studio MP3 audio via ElevenLabs
+  if (widget.type === 'audio_player' && widget.transcript) {
+    emit(onThought, {
+      agent: agentName,
+      action: 'audio_synthesis',
+      thought: 'Synthesizing ultra-realistic audio stream via ElevenLabs Studio Voice API...'
+    });
+    try {
+      const { synthesizeBriefing } = require('../audio/ttsService');
+      const audioResult = await synthesizeBriefing({
+        title: widget.title || 'Codebase Audio Briefing',
+        text: widget.transcript
+      });
+      if (audioResult && audioResult.audio_url) {
+        widget.audio_url = audioResult.audio_url;
+        widget.provider = audioResult.provider;
+        widget.duration_seconds = audioResult.duration_seconds;
+      }
+    } catch (audioErr) {
+      console.warn('Audio synthesis warning in subagent:', audioErr.message);
+    }
+  }
+
   return widget;
 }
 
