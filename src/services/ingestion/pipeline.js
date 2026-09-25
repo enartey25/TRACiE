@@ -134,8 +134,9 @@ async function runJob({ repository, job, token }) {
       throw new Error('Every chunk failed to embed — check the embedding service configuration.');
     }
 
-    await repoStore.updateJob(jobId, { status: 'complete', stage: 'done', completed_at: new Date() });
+    // Repo first, so a client that sees job=complete never sees repo=indexing.
     await repoStore.setRepositoryStatus(repository.id, 'ready', { lastIndexed: new Date(), commitSha: clone.commitSha });
+    await repoStore.updateJob(jobId, { status: 'complete', stage: 'done', completed_at: new Date() });
     log(jobId, `complete: ${done - failed}/${chunks.length} chunks stored`);
   } catch (error) {
     const message = redact(error.message, token);
