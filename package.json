@@ -7,7 +7,9 @@
     "start": "node src/server.js",
     "test": "node src/scripts/test-rag-pipeline.js",
     "test:auth": "node src/scripts/test-watsonx-auth.js",
-    "test:rag": "node src/scripts/test-rag-pipeline.js"
+    "test:rag": "node src/scripts/test-rag-pipeline.js",
+    "test:learning": "node src/scripts/test-phase2-learning.js",
+    "test:docgen": "node src/scripts/test-phase2-docgen.js"
   },
   "repository": {
     "type": "git",
