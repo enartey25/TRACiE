@@ -73,11 +73,16 @@ const AGENT_ROUTES = [
   },
   {
     name: 'ArchitectSubagent',
-    keywords: ['diagram', 'architecture', 'flow', 'pipeline', 'component', 'topology'],
-    reason: 'Query requests visual system topology, interaction diagram, or data flow',
+    keywords: [
+      'diagram', 'architecture', 'flow', 'pipeline', 'component', 'topology',
+      'sequence', 'sequence diagram', 'uml', 'class diagram', 'er diagram',
+      'schema', 'entity relationship', 'entities', 'dependencies', 'dependency graph',
+      'how they are connected', 'connected', 'relationship', 'subsystems', 'module map'
+    ],
+    reason: 'Query requests visual system topology, sequence diagram, UML class diagram, or ER schema',
     action: 'analyze_topology',
-    thought: 'Extracting module boundaries and data flow from code chunks to synthesize Mermaid diagram.',
-    systemPrompt: 'You are an expert software architect. Output ONLY valid JSON matching the schema.',
+    thought: 'Synthesizing publication-grade Mermaid diagram (Sequence, ER, UML, or Connected Topology).',
+    systemPrompt: 'You are an expert software architect and visual systems modeler. Output ONLY valid JSON matching the schema.',
     buildPrompt: buildArchitectPrompt,
   },
   {

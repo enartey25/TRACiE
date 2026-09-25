@@ -46,15 +46,221 @@ const fixtures = {
 
   architecture_diagram: {
     type: "architecture_diagram",
-    title: "RAG Query Pipeline Architecture",
-    diagram_source: `graph TD
-    User["Developer UI / Chat Panel"] -->|POST /api/query| API["Express Query Route"]
-    API -->|Generate Query Vector| WatsonEmbed["watsonx.ai Embeddings API"]
-    WatsonEmbed -->|Dense Vector| Chroma["ChromaDB Vector Store"]
-    Chroma -->|Top-k Code Chunks| PromptEngine["Prompt Assembler"]
-    PromptEngine -->|System Prompt + Chunks + Query| WatsonGen["watsonx.ai Text Generation"]
-    WatsonGen -->|Structured JSON| UIRenderer["Dynamic UIRenderer (Browser)"]`,
-    caption: "Data flow for developer queries entering TRACiE and returning rich widgets."
+    title: "TRACiE Connected Subsystem Topology (Supabase-Style)",
+    diagram_source: `flowchart TD
+    subgraph Presentation ["🖥️ Presentation Layer (Developer Canvas)"]
+      UI["public/index.html & app.js"]
+      SSEListener["EventSource SSE Client"]
+    end
+
+    subgraph APILayer ["⚡ Express API Gateway (port 3000)"]
+      Server["src/server.js"]
+      StreamEndpoint["/api/stream (SSE)"]
+      QueryEndpoint["/api/query (REST)"]
+      DocsEndpoint["/api/docs (Proposals)"]
+      AudioEndpoint["/api/audio (TTS)"]
+    end
+
+    subgraph AgentCore ["🧠 IBM BeeAI Multi-Agent Core"]
+      Supervisor["Supervisor (supervisor.js)"]
+      RunSubagent["Subagent Runner (runSubagent.js)"]
+      ArchitectAgent["ArchitectSubagent (Diagrams)"]
+      ExplainerAgent["CodeExplainerSubagent"]
+      NavAgent["NavigatorSubagent (Layout)"]
+      CurriculumAgent["CurriculumSubagent (Quiz/Deck)"]
+      DocAgent["DocWriterSubagent (Diffs)"]
+      AudioAgent["AudioSubagent (Voice)"]
+    end
+
+    subgraph Intelligence ["⚙️ RAG & Knowledge Services"]
+      RAG["src/services/rag/pipeline.js"]
+      Retriever["src/services/rag/retriever.js"]
+      Parser["src/services/rag/jsonParser.js"]
+      Memory["src/services/memory/sessionMemory.js"]
+      Enricher["src/services/enrichment/contextEnricher.js"]
+    end
+
+    subgraph External ["🌐 External Engines & Storage"]
+      Chroma["ChromaDB Vector Store (port 8000)"]
+      Groq["Groq LPU (gpt-oss-120b)"]
+      WatsonX["IBM watsonx.ai (Granite 3.0)"]
+      ElevenLabs["ElevenLabs Studio (Turbo v2.5)"]
+    end
+
+    UI -->|User Question| StreamEndpoint
+    StreamEndpoint --> Server
+    Server --> RAG
+    RAG --> Memory
+    RAG --> Enricher
+    RAG --> Retriever
+    Retriever -->|Cosine Similarity ANN| Chroma
+    RAG --> Supervisor
+    Supervisor -->|Intent Routing| AgentCore
+    AgentCore --> RunSubagent
+    RunSubagent -->|Ultra-Fast Inference| Groq
+    RunSubagent -.->|Enterprise Model| WatsonX
+    AudioAgent -->|Studio Audio MP3| ElevenLabs
+    RunSubagent --> Parser
+    Parser -->|Validated JSON Widget| Server
+    Server -->|SSE agent_thought & complete| SSEListener
+    SSEListener --> UI`,
+    caption: "Complete end-to-end component topology showing interconnected paths and communication protocols across TRACiE."
+  },
+
+  sequence_diagram: {
+    type: "architecture_diagram",
+    title: "Real-Time Query & SSE Thought Streaming Sequence",
+    diagram_source: `sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant Canvas as Browser Canvas
+    participant API as Express Server
+    participant Sup as BeeAI Supervisor
+    participant Chroma as ChromaDB
+    participant Groq as Groq LPU (120B)
+    participant TTS as ElevenLabs API
+
+    Dev->>Canvas: Submits query ("Show architecture")
+    Canvas->>API: GET /api/stream?query=...
+    activate API
+    API-->>Canvas: event: status (Analyzing codebase...)
+
+    API->>Sup: orchestrateAgents(query)
+    activate Sup
+    Sup-->>API: onThought("Intent analysis...")
+    API-->>Canvas: event: agent_thought
+
+    Sup->>Chroma: ANN Vector Search
+    Chroma-->>Sup: Top-k Relevant Chunks
+
+    Sup-->>API: onThought("Delegating to ArchitectSubagent")
+    API-->>Canvas: event: agent_handoff
+
+    Sup->>Groq: Generate Structured JSON Widget
+    activate Groq
+    Groq-->>Sup: Valid Widget JSON (architecture_diagram)
+    deactivate Groq
+
+    opt If Audio Briefing Requested
+      Sup->>TTS: POST /v1/text-to-speech
+      TTS-->>Sup: Studio MP3 Base64 Data URI
+    end
+
+    Sup-->>API: Complete Validated Widget
+    deactivate Sup
+
+    API-->>Canvas: event: complete (widget payload)
+    API-->>Canvas: event: done
+    deactivate API
+
+    Canvas->>Dev: Renders interactive Mermaid diagram`,
+    caption: "Detailed step-by-step lifeline sequence from query submission to live diagram rendering."
+  },
+
+  er_diagram: {
+    type: "architecture_diagram",
+    title: "PostgreSQL Database Schema & Entity Relationships",
+    diagram_source: `erDiagram
+    USERS ||--o{ SESSIONS : "creates"
+    USERS {
+      uuid id PK
+      string username
+      string email
+      string role
+      timestamp created_at
+    }
+
+    SESSIONS ||--o{ QUERIES : "contains"
+    SESSIONS ||--o{ DOC_PROPOSALS : "generates"
+    SESSIONS {
+      uuid id PK
+      uuid user_id FK
+      string session_title
+      float bobcoins_consumed
+      timestamp started_at
+      timestamp last_active
+    }
+
+    QUERIES ||--o{ CITATIONS : "references"
+    QUERIES {
+      uuid id PK
+      uuid session_id FK
+      text query_text
+      string routed_agent
+      string widget_type
+      jsonb response_payload
+      timestamp created_at
+    }
+
+    CITATIONS {
+      uuid id PK
+      uuid query_id FK
+      string file_path
+      int start_line
+      int end_line
+      text snippet
+    }
+
+    DOC_PROPOSALS {
+      uuid id PK
+      uuid session_id FK
+      string target_file
+      text diff_markdown
+      text rationale
+      string pr_title
+      string status
+      timestamp created_at
+    }`,
+    caption: "Supabase-style Entity Relationship Diagram representing TRACiE's relational PostgreSQL models."
+  },
+
+  uml_diagram: {
+    type: "architecture_diagram",
+    title: "Multi-Agent System UML Class Architecture",
+    diagram_source: `classDiagram
+    class TRACiESupervisor {
+      +Array AGENT_ROUTES
+      +orchestrateAgents(params) Promise~Widget~
+      +selectAgent(query) AgentRoute
+    }
+
+    class SubagentRunner {
+      +runSubagent(params) Promise~Widget~
+      +emit(onThought, payload) void
+    }
+
+    class RAGPipeline {
+      +executeRAGQuery(params) Promise~Widget~
+    }
+
+    class ChromaRetriever {
+      +retrieveRelevantChunks(query, topK) Promise~Array~
+    }
+
+    class SessionMemory {
+      -Map sessions
+      +getHistory(sessionId) Array
+      +addTurn(sessionId, role, text) void
+      +clearSession(sessionId) void
+    }
+
+    class ContextEnricher {
+      +enrichQuery(query) Promise~string~
+      +fetchMDNDoc(term) Promise~string~
+    }
+
+    class TTSService {
+      +synthesizeBriefing(params) Promise~Widget~
+      +synthesizeWithElevenLabs(text) Promise~string~
+    }
+
+    TRACiESupervisor --> SubagentRunner : delegates
+    RAGPipeline --> TRACiESupervisor : orchestrates
+    RAGPipeline --> ChromaRetriever : retrieves
+    RAGPipeline --> SessionMemory : tracks turns
+    RAGPipeline --> ContextEnricher : enriches
+    SubagentRunner --> TTSService : calls on audio`,
+    caption: "UML Class Diagram illustrating object structures, methods, and coupling across core services."
   },
 
   key_value_list: {

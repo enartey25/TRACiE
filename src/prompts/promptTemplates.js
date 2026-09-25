@@ -67,22 +67,52 @@ REMINDER: Return ONLY a valid JSON object matching the contract specification. N
 
 function buildArchitectPrompt({ query, chunks, conversationHistory = '' }) {
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
+  const tree = getCompleteRepositoryTree();
+  const manifest = formatTreeAsText(tree);
+
   return `You are the Architect Subagent in the TRACiE multi-agent system.
-Based on the code chunks, generate a valid Mermaid.js architecture diagram.
-${conversationHistory ? `\nPRIOR TURNS:\n${conversationHistory}\n` : ''}
-CODE CHUNKS:
+Your mission is to generate comprehensive, publication-grade Mermaid.js diagrams visualizing the TRACiE codebase.
+
+CODEBASE MODULE MANIFEST:
+${manifest}
+
+RETRIEVED CODE CHUNKS:
 ${context}
+${conversationHistory ? `\nPRIOR TURNS:\n${conversationHistory}\n` : ''}
 
 USER QUERY:
 ${query}
 
-REQUIREMENTS:
-Return a JSON object:
+DIAGRAM SELECTION RULES:
+1. SEQUENCE DIAGRAM: If the user asks for a sequence diagram, interaction flow, or step-by-step execution timeline:
+   - Use "sequenceDiagram" syntax with "autonumber" and actors/participants (e.g. Developer, UI, Server, Supervisor, ChromaDB, Groq, ElevenLabs).
+   - Use activations (activate/deactivate), solid/dashed arrows (->>, -->>), and note boxes.
+
+2. ER / SCHEMA DIAGRAM (SUPABASE STYLE): If the user asks for an ER diagram, database schema, entity relationships, or data model:
+   - Use "erDiagram" syntax.
+   - Define entities with fields, types, and primary/foreign keys (e.g. USERS, SESSIONS, QUERIES, CODE_CHUNKS, DOC_PROPOSALS).
+   - Show cardinality links (||--o{, }|--||, ||--||) and relation labels.
+
+3. UML / CLASS DIAGRAM: If the user asks for UML, class hierarchy, interfaces, or object models:
+   - Use "classDiagram" syntax.
+   - Define classes with public (+) and private (-) properties and methods with signatures.
+   - Show inheritance (<|--), composition (*--), and association (-->).
+
+4. CONNECTED SYSTEM TOPOLOGY (SUPABASE-STYLE MODULE MAP): If the user asks for repository layout, component connections, or system architecture:
+   - Use "flowchart TD" or "flowchart LR" with subgraphs grouping subsystems (e.g., Presentation, API Routes, BeeAI Supervisor, RAG Core, External Services).
+   - Show labeled connection paths showing exact protocols, HTTP methods, and data contracts (e.g. -->|HTTP POST /api/query|, -->|SSE EventStream|).
+
+MERMAID SYNTAX STRICT RULES:
+- Always use valid, clean Mermaid DSL without markdown code blocks inside the JSON string (escape newlines as \\n).
+- Always quote node labels containing spaces, parentheses, or brackets: Node["Label (Extra Info)"].
+- Keep node IDs alphanumeric without spaces.
+
+OUTPUT JSON FORMAT:
 {
   "type": "architecture_diagram",
-  "title": "Clear Diagram Title",
-  "diagram_source": "Valid Mermaid DSL e.g. graph TD\\n  A-->B",
-  "caption": "Explanation of the architecture"
+  "title": "Descriptive Diagram Title",
+  "diagram_source": "Mermaid DSL string",
+  "caption": "Clear architectural explanation of the diagram components and data flow"
 }`;
 }
 
