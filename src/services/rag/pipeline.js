@@ -35,6 +35,7 @@ async function executeRAGQuery({ query, repoId, sessionId, conversationHistory =
 
   // 2. Retrieve top-k nearest code chunks from ChromaDB
   const chunks = await retrieveCodeChunks({
+    query,
     queryEmbedding,
     repoId,
     topK: 5

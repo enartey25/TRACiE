@@ -311,9 +311,15 @@ Return a JSON object:
 function buildAudioBriefingPrompt({ query, chunks }) {
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
   return `You are the Audio Subagent in the TRACiE multi-agent system.
-Generate a natural, spoken audio briefing script explaining the codebase architecture.
+Your mission is to generate a natural, conversational spoken audio briefing script that DIRECTLY ANSWERS the USER QUERY.
 
-CODE CHUNKS:
+CRITICAL INSTRUCTIONS:
+- Directly focus on the topic requested in USER QUERY (e.g. if the user asked about the database, explain TRACiE's dual database architecture: ChromaDB for 768-dim vector embeddings and PostgreSQL for relational sessions, queries, and doc proposals).
+- Do NOT provide a generic server overview unless the user specifically asked for a general overview.
+- The transcript must sound conversational, natural, and engaging—like a senior tech lead or podcast host explaining the subsystem directly to a teammate.
+- Avoid reading out raw punctuation, code brackets, or raw SQL syntax verbatim; explain the concepts smoothly.
+
+CODEBASE CONTEXT:
 ${context}
 
 USER QUERY:
@@ -323,9 +329,9 @@ REQUIREMENTS:
 Return a JSON object:
 {
   "type": "audio_player",
-  "title": "Audio Briefing: Codebase Architecture",
-  "transcript": "Natural spoken explanation intended for text-to-speech audio synthesis...",
-  "audio_url": "https://actions.google.com/sounds/v1/science_fiction/scifi_hum.ogg",
+  "title": "Audio Briefing: [Specific Topic from User Query]",
+  "transcript": "Natural spoken explanation directly answering the user's specific query...",
+  "audio_url": "",
   "duration_seconds": 25.0
 }`;
 }
