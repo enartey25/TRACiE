@@ -102,3 +102,36 @@ Streams real-time agent thoughts and token deltas:
 
 ### 3. `GET /api/fixtures`
 Returns mock fixtures for all Phase 1 widgets for offline UI testing.
+
+---
+
+## Backend Infrastructure & Repository Ingestion (Gabriel)
+
+### Setup
+```bash
+cp .env.example .env            # fill DATABASE_URL (Supabase "Session pooler" string)
+                                # + CHROMA_API_KEY/TENANT/DATABASE for the shared Chroma Cloud index
+# Only if running ChromaDB locally instead of Chroma Cloud:
+#   pip install chromadb && npm run chroma     # http://localhost:8000
+npm run db:migrate              # creates tables (safe to re-run)
+npm start                       # terminal 2
+npm run test:ingest             # optional: clone->chunk->embed->Chroma smoke test (no Postgres needed)
+```
+`GET /api/health` reports `postgres` and `chromadb` reachability.
+
+### Repository API
+| Method | Route | Body / Response |
+|---|---|---|
+| `POST` | `/api/repos` | `{ url, token? }` → `202 { repositoryId, jobId, repository, job }` |
+| `GET` | `/api/repos` | `{ repositories: [{ id, name, url, indexStatus, latestJob }] }` |
+| `GET` | `/api/repos/:id` | repository details |
+| `GET` | `/api/repos/:id/status` | `{ status, stage, chunksDone, chunksTotal, progress (0-1), error }` — poll every 1-2s |
+| `POST` | `/api/repos/:id/reindex` | `202 { repositoryId, jobId }` |
+
+`status`: `pending → running → complete | failed`. `stage`: `queued → cloning → parsing → embedding → done`.
+
+### Where things plug in
+- **Embeddings (Ethan):** `src/services/ingestion/embedder.js` is the only place ingestion calls the embedding model.
+- **Retrieval (Ethan):** `queryChunks({ embedding, repositoryId, topK })` in `src/db/chroma.js`.
+- **Chunk metadata** in the `code_chunks` collection: `chunk_id, repository_id, file_path, language, start_line, end_line, module_name, symbols`.
+- **Phase 2 stubs** (return 501): `src/routes/phase2.js`.

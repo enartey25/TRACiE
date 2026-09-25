@@ -5,6 +5,11 @@ const { verifyAuth } = require('./services/watsonx/auth');
 const queryRouter = require('./routes/query');
 const streamRouter = require('./routes/stream');
 const fixtures = require('./contracts/fixtures');
+const reposRouter = require('./routes/repos');
+const phase2Router = require('./routes/phase2');
+const postgres = require('./db/postgres');
+const chroma = require('./db/chroma');
+const repoStore = require('./services/repos/repoStore');
 
 const path = require('path');
 
@@ -16,11 +21,14 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Health & System Diagnostic Route
-app.get('/api/health', (req, res) => {
+// Returns 200 with status 'ok' when Postgres + ChromaDB are reachable, 'degraded' otherwise.
+app.get('/api/health', async (req, res) => {
+  const [pg, vector] = await Promise.all([postgres.ping(), chroma.ping()]);
   res.json({
-    status: 'ok',
+    status: pg.ok && vector.ok ? 'ok' : 'degraded',
     service: 'TRACiE AI Assistant Backend',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    dependencies: { postgres: pg, chromadb: vector }
   });
 });
 
@@ -48,9 +56,17 @@ app.get('/api/fixtures/:type', (req, res) => {
 app.use('/api', queryRouter);
 app.use('/api', streamRouter);
 
+// Gabriel's Repository Ingestion Routes
+app.use('/api', reposRouter);
+app.use('/api', phase2Router);
+
 // Start server if run directly
 if (require.main === module) {
   const PORT = config.port;
+  repoStore.failOrphanedJobs()
+    .then(n => n && console.log(`[startup] marked ${n} orphaned indexing job(s) as failed`))
+    .catch(e => console.warn(`[startup] Postgres not ready: ${e.message}`));
+
   app.listen(PORT, () => {
     console.log(`===============================================`);
     console.log(`🚀 TRACiE Backend Service running on port ${PORT}`);
@@ -59,6 +75,8 @@ if (require.main === module) {
     console.log(`   - Query:    POST http://localhost:${PORT}/api/query`);
     console.log(`   - Stream:   GET  http://localhost:${PORT}/api/stream`);
     console.log(`   - Fixtures: http://localhost:${PORT}/api/fixtures`);
+    console.log(`   - Repos:    POST/GET http://localhost:${PORT}/api/repos`);
+    console.log(`   - Status:   GET  http://localhost:${PORT}/api/repos/:id/status`);
     console.log(`===============================================`);
   });
 }

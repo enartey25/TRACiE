@@ -7,7 +7,10 @@
     "start": "node src/server.js",
     "test": "node src/scripts/test-rag-pipeline.js",
     "test:auth": "node src/scripts/test-watsonx-auth.js",
-    "test:rag": "node src/scripts/test-rag-pipeline.js"
+    "test:rag": "node src/scripts/test-rag-pipeline.js",
+    "db:migrate": "node src/db/migrate.js",
+    "chroma": "python -c \"import sys;from chromadb.cli.cli import app;sys.argv[0]='chroma';app()\" run --path ./chroma_data --port 8000",
+    "test:ingest": "node src/scripts/test-ingestion.js"
   },
   "repository": {
     "type": "git",
@@ -23,9 +26,14 @@
   "homepage": "https://github.com/enartey25/TRACiE#readme",
   "dependencies": {
     "axios": "^1.20.0",
+    "chromadb": "^3.5.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
-    "groq-sdk": "^1.6.0"
+    "groq-sdk": "^1.6.0",
+    "pg": "^8.23.0",
+    "simple-git": "^4.0.1",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.22.6"
   }
 }
