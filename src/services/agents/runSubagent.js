@@ -1,4 +1,5 @@
 const { generateGroqCompletion } = require('../groq/generator');
+const { generateHuggingFaceCompletion } = require('../huggingface/generator');
 const { parseAndValidateWidgetJSON } = require('../rag/jsonParser');
 
 /**
@@ -47,7 +48,24 @@ async function runSubagent({
     externalContext
   });
 
-  const { generatedText, metadata } = await generateGroqCompletion({ prompt, systemPrompt });
+  const provider = (process.env.LLM_PROVIDER || 'groq').toLowerCase();
+  let generatedText;
+  let metadata;
+
+  if (provider === 'huggingface' || provider === 'granite') {
+    const res = await generateHuggingFaceCompletion({ prompt, systemPrompt });
+    generatedText = res.generatedText;
+    metadata = res.metadata;
+  } else if (provider === 'watsonx') {
+    const { generateText } = require('../watsonx/generator');
+    const res = await generateText({ prompt });
+    generatedText = res.generatedText;
+    metadata = res.metadata;
+  } else {
+    const res = await generateGroqCompletion({ prompt, systemPrompt });
+    generatedText = res.generatedText;
+    metadata = res.metadata;
+  }
 
   const widget = parseAndValidateWidgetJSON(generatedText);
   widget._agent = agentName;
