@@ -1,4 +1,5 @@
 const { SYSTEM_PROMPT } = require('./systemPrompt');
+const { getCompleteRepositoryTree, formatTreeAsText } = require('../services/navigator/repositoryScanner');
 
 /**
  * Formats retrieved code chunks into a structured context block for the LLM.
@@ -109,37 +110,28 @@ Return a JSON object:
 }`;
 }
 
-function buildNavigatorPrompt({ query, chunks }) {
-  const filePaths = chunks.map(c => `[File: ${c.file_path}]`).join('\n');
-  return `You are the Navigator Subagent in the TRACiE multi-agent system.
-Generate a hierarchical file tree representing the project structure.
+function buildNavigatorPrompt({ query }) {
+  const tree = getCompleteRepositoryTree();
+  const manifest = formatTreeAsText(tree);
 
-CODE CHUNKS:
-${filePaths}
+  return `You are the Navigator Subagent in the TRACiE multi-agent system.
+Your goal is to present the complete, comprehensive hierarchical file tree of the TRACiE codebase.
+
+ENTIRE REPOSITORY FILE STRUCTURE & DESCRIPTIONS:
+${manifest}
 
 USER QUERY:
 ${query}
 
-REQUIREMENTS:
-Return a JSON object:
+CRITICAL REQUIREMENT:
+Return a JSON object with the FULL repository tree (including public, src, config, contracts, prompts, routes, scripts, services, agents, rag, watsonx, etc.).
+Do NOT truncate or omit directories or files. Every single folder and file from the manifest must be included in the children array.
+
+Format:
 {
   "type": "file_tree",
-  "title": "Repository Structure",
-  "root": {
-    "name": "TRACiE",
-    "type": "directory",
-    "children": [
-      {
-        "name": "src",
-        "type": "directory",
-        "children": [
-          { "name": "server.js", "type": "file" },
-          { "name": "routes", "type": "directory", "children": [] }
-        ]
-      },
-      { "name": "package.json", "type": "file" }
-    ]
-  }
+  "title": "Complete TRACiE Repository Layout",
+  "root": ${JSON.stringify(tree, null, 2)}
 }`;
 }
 

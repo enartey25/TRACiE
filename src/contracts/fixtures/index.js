@@ -1,3 +1,5 @@
+const { getCompleteRepositoryTree } = require('../../services/navigator/repositoryScanner');
+
 const fixtures = {
   chat_response: {
     type: "chat_response",
@@ -38,27 +40,8 @@ const fixtures = {
 
   file_tree: {
     type: "file_tree",
-    title: "Project Architecture Tree",
-    root: {
-      name: "TRACiE",
-      type: "directory",
-      path: "/",
-      description: "Root repository folder",
-      children: [
-        {
-          name: "src",
-          type: "directory",
-          path: "/src",
-          children: [
-            { name: "config", type: "directory", path: "/src/config", children: [] },
-            { name: "services", type: "directory", path: "/src/services", children: [] },
-            { name: "routes", type: "directory", path: "/src/routes", children: [] },
-            { name: "server.js", type: "file", path: "/src/server.js", description: "Express app entry point" }
-          ]
-        },
-        { name: "package.json", type: "file", path: "/package.json", description: "Node.js dependencies & scripts" }
-      ]
-    }
+    title: "Complete TRACiE Repository Layout",
+    root: getCompleteRepositoryTree()
   },
 
   architecture_diagram: {

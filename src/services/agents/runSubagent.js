@@ -76,6 +76,16 @@ async function runSubagent({
     }
   }
 
+  // If this is a repository navigator subagent, guarantee the entire file tree is provided
+  if (widget.type === 'file_tree') {
+    const { getCompleteRepositoryTree } = require('../navigator/repositoryScanner');
+    const fullTree = getCompleteRepositoryTree();
+    if (!widget.root || !widget.root.children || widget.root.children.length < fullTree.children.length) {
+      widget.root = fullTree;
+    }
+    widget.title = widget.title || 'Complete TRACiE Repository Layout';
+  }
+
   return widget;
 }
 
