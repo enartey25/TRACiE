@@ -6,7 +6,9 @@ const queryRouter = require('./routes/query');
 const streamRouter = require('./routes/stream');
 const fixtures = require('./contracts/fixtures');
 const reposRouter = require('./routes/repos');
-const phase2Router = require('./routes/phase2');
+const webhooksRouter = require('./routes/webhooks');
+const sessionsRouter = require('./routes/sessions');
+const docProposalsRouter = require('./routes/docProposals');
 const postgres = require('./db/postgres');
 const chroma = require('./db/chroma');
 const repoStore = require('./services/repos/repoStore');
@@ -17,6 +19,8 @@ const app = express();
 
 // Middlewares
 app.use(cors());
+// GitHub webhooks need the raw body for HMAC verification, so mount before express.json().
+app.use('/api/webhooks', webhooksRouter);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -58,7 +62,8 @@ app.use('/api', streamRouter);
 
 // Gabriel's Repository Ingestion Routes
 app.use('/api', reposRouter);
-app.use('/api', phase2Router);
+app.use('/api', sessionsRouter);
+app.use('/api', docProposalsRouter);
 
 // Start server if run directly
 if (require.main === module) {
@@ -77,6 +82,8 @@ if (require.main === module) {
     console.log(`   - Fixtures: http://localhost:${PORT}/api/fixtures`);
     console.log(`   - Repos:    POST/GET http://localhost:${PORT}/api/repos`);
     console.log(`   - Status:   GET  http://localhost:${PORT}/api/repos/:id/status`);
+    console.log(`   - Webhook:  POST http://localhost:${PORT}/api/webhooks/github`);
+    console.log(`   - API docs: see API.md`);
     console.log(`===============================================`);
   });
 }

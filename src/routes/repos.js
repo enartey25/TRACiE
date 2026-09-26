@@ -12,13 +12,18 @@ function jobView(job) {
   const total = job.chunks_total || 0;
   return {
     jobId: job.id,
+    trigger: job.trigger,           // connect | reindex | webhook
+    fullReindex: job.full_reindex,
     status: job.status,             // pending | running | complete | failed
-    stage: job.stage,               // queued | cloning | parsing | embedding | done
+    stage: job.stage,               // queued | cloning | parsing | embedding | history | done
     filesTotal: job.files_total,
+    filesUnchanged: job.files_unchanged,
+    filesRemoved: job.files_removed,
     chunksTotal: total,
     chunksDone: job.chunks_done,
     chunksFailed: job.chunks_failed,
     progress: job.status === 'complete' ? 1 : total ? Math.min(1, job.chunks_done / total) : 0,
+    history: { status: job.history_status || null, chunks: job.history_chunks || 0, error: job.history_error || null },
     error: job.error_message || null,
     startedAt: job.started_at,
     completedAt: job.completed_at
@@ -35,6 +40,7 @@ function repoView(repo) {
     hasToken: repo.has_token,
     lastCommitSha: repo.last_commit_sha,
     lastIndexed: repo.last_indexed,
+    historyIndexedAt: repo.history_indexed_at || null,
     createdAt: repo.created_at
   };
 }
@@ -72,7 +78,7 @@ router.post('/repos', async (req, res) => {
     });
 
     const active = await repoStore.getActiveJob(repository.id);
-    const job = active || (await startIngestion(repository));
+    const job = active || (await startIngestion(repository, { trigger: repository.created ? 'connect' : 'reindex' }));
 
     res.status(202).json({
       repositoryId: repository.id,
@@ -132,14 +138,19 @@ router.get('/repos/:id/status', async (req, res) => {
   }
 });
 
-/** POST /api/repos/:id/reindex -> 202 { repositoryId, jobId } */
+/**
+ * POST /api/repos/:id/reindex  body (optional): { full: true }
+ * Incremental by default (only changed files re-embedded); full=true wipes and rebuilds.
+ * -> 202 { repositoryId, jobId, alreadyIndexing, job }
+ */
 router.post('/repos/:id/reindex', async (req, res) => {
   if (!validId(req, res)) return;
   try {
     const repo = await repoStore.getRepository(req.params.id);
     if (!repo) return res.status(404).json({ error: 'Repository not found.' });
     const active = await repoStore.getActiveJob(repo.id);
-    const job = active || (await startIngestion(repo));
+    const full = Boolean(req.body && req.body.full === true);
+    const job = active || (await startIngestion(repo, { trigger: 'reindex', full }));
     res.status(202).json({ repositoryId: repo.id, jobId: job.id, alreadyIndexing: Boolean(active), job: jobView(job) });
   } catch (error) {
     res.status(500).json({ error: error.message });

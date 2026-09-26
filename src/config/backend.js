@@ -21,6 +21,13 @@ const config = {
   chromaDatabase: process.env.CHROMA_DATABASE || '',
 
   githubToken: process.env.GITHUB_TOKEN || '',
+  githubWebhookSecret: process.env.GITHUB_WEBHOOK_SECRET || '',
+
+  history: {
+    enabled: process.env.INGEST_HISTORY !== 'false',
+    maxCommits: parseInt(process.env.HISTORY_MAX_COMMITS, 10) || 200,
+    maxPullRequests: parseInt(process.env.HISTORY_MAX_PRS, 10) || 100
+  },
   tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY || '',
 
   ingestion: {

@@ -10,7 +10,8 @@
     "test:rag": "node src/scripts/test-rag-pipeline.js",
     "db:migrate": "node src/db/migrate.js",
     "chroma": "python -c \"import sys;from chromadb.cli.cli import app;sys.argv[0]='chroma';app()\" run --path ./chroma_data --port 8000",
-    "test:ingest": "node src/scripts/test-ingestion.js"
+    "test:ingest": "node src/scripts/test-ingestion.js",
+    "test:webhook": "node src/scripts/test-webhook.js"
   },
   "repository": {
     "type": "git",

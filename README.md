@@ -107,31 +107,29 @@ Returns mock fixtures for all Phase 1 widgets for offline UI testing.
 
 ## Backend Infrastructure & Repository Ingestion (Gabriel)
 
-### Setup
+- **[API.md](API.md)**: every backend route with its request and response shapes
+- **[HANDOFF.md](HANDOFF.md)**: what's built, known limitations, and notes for each teammate
+
+### Run from a clean clone
+Postgres (Supabase) and ChromaDB (Chroma Cloud) are hosted, so there's nothing to install locally besides Node and git.
 ```bash
-cp .env.example .env            # fill DATABASE_URL (Supabase "Session pooler" string)
-                                # + CHROMA_API_KEY/TENANT/DATABASE for the shared Chroma Cloud index
-# Only if running ChromaDB locally instead of Chroma Cloud:
-#   pip install chromadb && npm run chroma     # http://localhost:8000
-npm run db:migrate              # creates tables (safe to re-run)
-npm start                       # terminal 2
-npm run test:ingest             # optional: clone->chunk->embed->Chroma smoke test (no Postgres needed)
+npm install
+cp .env.example .env    # paste the shared DATABASE_URL, CHROMA_*, GITHUB_WEBHOOK_SECRET, TOKEN_ENCRYPTION_KEY
+npm run db:migrate      # create/update tables (idempotent)
+npm start               # http://localhost:3000  (PowerShell: $env:PORT=3001; npm start  if 3000 is taken)
 ```
-`GET /api/health` reports `postgres` and `chromadb` reachability.
+Check it at `GET /api/health`, which should show `"status":"ok"`. For a pipeline smoke test without the server, run `npm run test:ingest`.
 
-### Repository API
-| Method | Route | Body / Response |
+Offline alternative for ChromaDB: `pip install chromadb`, run `npm run chroma` in a second terminal, and leave `CHROMA_API_KEY` empty.
+
+### Main routes
+| Method | Route | Purpose |
 |---|---|---|
-| `POST` | `/api/repos` | `{ url, token? }` → `202 { repositoryId, jobId, repository, job }` |
-| `GET` | `/api/repos` | `{ repositories: [{ id, name, url, indexStatus, latestJob }] }` |
-| `GET` | `/api/repos/:id` | repository details |
-| `GET` | `/api/repos/:id/status` | `{ status, stage, chunksDone, chunksTotal, progress (0-1), error }` — poll every 1-2s |
-| `POST` | `/api/repos/:id/reindex` | `202 { repositoryId, jobId }` |
-
-`status`: `pending → running → complete | failed`. `stage`: `queued → cloning → parsing → embedding → done`.
-
-### Where things plug in
-- **Embeddings (Ethan):** `src/services/ingestion/embedder.js` is the only place ingestion calls the embedding model.
-- **Retrieval (Ethan):** `queryChunks({ embedding, repositoryId, topK })` in `src/db/chroma.js`.
-- **Chunk metadata** in the `code_chunks` collection: `chunk_id, repository_id, file_path, language, start_line, end_line, module_name, symbols`.
-- **Phase 2 stubs** (return 501): `src/routes/phase2.js`.
+| `POST` | `/api/repos` | Connect a GitHub repo `{ url, token? }` and start indexing |
+| `GET` | `/api/repos`, `/api/repos/:id` | List repos / get one repo |
+| `GET` | `/api/repos/:id/status` | Poll indexing progress |
+| `POST` | `/api/repos/:id/reindex` | Re-index (incremental; `{ full: true }` rebuilds) |
+| `POST` | `/api/webhooks/github` | Push-triggered re-index (called by GitHub) |
+| `POST`/`GET` | `/api/sessions`, `/api/sessions/:id` | Persistent chat sessions and their logged queries |
+| `POST`/`GET` | `/api/repos/:id/doc-proposals` | Store / list documentation proposals |
+| `POST` | `/api/doc-proposals/:id/approve` \| `reject` | Review a proposal |
