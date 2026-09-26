@@ -25,3 +25,29 @@ Options: letter badge stays vertically centred at top via `align-items: flex-sta
 
 **Not matched / notes:**
 - None. All design states reproduced. Keyboard (arrow keys, Enter, Space, Tab) and results screen fully inherited from `questionFlow`.
+
+---
+
+## flashcards
+
+**Date:** 2025-07  
+**Files changed:**
+- `frontend/renderer/widgets/flashcards.js` — created
+- `frontend/renderer/widgets/flashcards.css` — created
+- `frontend/renderer/widgets/manifest.js` — added `{ name: 'flashcards', css: true }` after code-exercise
+
+**States implemented:**
+- Front face (default): big bold term, muted prompt, sage-tint "Click to flip" hint box with `--uir-line-strong` border
+- Back face (flipped): bold back title, detail paragraph, optional "Related term" box (`--uir-sage-soft` bg), footer divider + "Needs review" outline pill + "Got it" dark pill
+- Flip: 3D `rotateY(180deg)` 450 ms on click or Enter/Space; `prefers-reduced-motion` crossfade fallback
+- "Got it": marks card `learned`, advances to next
+- "Needs review": marks card `review`, advances to next
+- Progress panel (right column, stacks below 640 px): live counts for Learned / Needs review, learned/N progress bar, "Review rhythm" explanation box
+- Deck complete screen: headline, learned/review counts, "Review again" button (restarts with `review`-tagged cards only; hidden when none need review)
+
+**Design matched:** `docs/renderer/design/flashcards-audio.png` (left half)  
+Card header: "N of M flashcards" counter + "Flashcard" pill chip + 4 px progress bar (same pattern as quiz).  
+Progress panel matches the three-section design: title/subtitle, Learned/Needs-review stat rows with live counts, progress bar, Review rhythm box.
+
+**Not matched / notes:**
+- None. All specified states and interactions implemented.
