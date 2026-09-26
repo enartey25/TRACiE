@@ -76,13 +76,28 @@
       $('all').onclick = () => {
         const scratch = document.createElement('div');
         let ok = 0, todo = 0, bad = 0;
+
+        // Pass 1 — named fixtures
         const lines = Object.entries(WIDGET_FIXTURES).map(([k, fx]) => {
           try {
             const badge = UIRenderer.render(fx, scratch);
             const status = badge === 'custom' ? (todo++, 'TODO') : (ok++, 'ok');
-            return `${status.padEnd(6)} ${k.padEnd(22)} ${badge}`;
-          } catch (e) { bad++; return `THROWS ${k.padEnd(22)} ${e.message}`; }
+            return `${status.padEnd(6)} ${k.padEnd(30)} ${badge}`;
+          } catch (e) { bad++; return `THROWS ${k.padEnd(30)} ${e.message}`; }
         });
+
+        // Pass 2 — auto-generated empty payloads for every registered type (SRS 26.3)
+        lines.push('');
+        lines.push('── empty-payload pass (' + UIRenderer.list().length + ' types) ──');
+        UIRenderer.list().forEach(({ type }) => {
+          const key = type + '_empty';
+          try {
+            const badge = UIRenderer.render({ type, payload: {} }, scratch);
+            const status = badge === 'custom' ? (todo++, 'TODO') : (ok++, 'ok');
+            lines.push(`${status.padEnd(6)} ${key.padEnd(30)} ${badge}`);
+          } catch (e) { bad++; lines.push(`THROWS ${key.padEnd(30)} ${e.message}`); }
+        });
+
         $('report').textContent = `ok ${ok} · todo ${todo} · THROWS ${bad}\n` + lines.join('\n');
       };
 

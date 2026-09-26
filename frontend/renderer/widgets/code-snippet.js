@@ -5,7 +5,8 @@
   UIRenderer.register('code_snippet', {
     category: 'Code and Files',
     label: 'Code snippet',
-    render(p, { codePanel }) {
+    render(p, { codePanel, notice }) {
+      if (!p || !p.code) return notice('info', 'No code to display.');
       return codePanel(p);
     },
   });

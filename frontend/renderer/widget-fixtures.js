@@ -336,6 +336,10 @@ window.WIDGET_FIXTURES = {
     },
   },
 
+  /* audio edge-case fixtures (security guard regression) */
+  audio_empty:   { type: 'audio', payload: {} },
+  audio_bad_src: { type: 'audio', payload: { src: 'http://bad' } },
+
   /* ================= WORKFLOWS (no bespoke design yet: same visual language) ================= */
 
   checklist: {
