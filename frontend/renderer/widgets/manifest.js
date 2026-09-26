@@ -9,7 +9,8 @@
     { name: 'basic-text' },
     { name: 'mermaid-diagrams' },
     { name: 'code-snippet' },
-    // Bob adds new widgets here, e.g. { name: 'quiz', css: true },
+    { name: 'quiz', css: true },
+    // Bob adds new widgets here, e.g. { name: 'flashcards', css: true },
   ];
 
   const me = document.currentScript;
