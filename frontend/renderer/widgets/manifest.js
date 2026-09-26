@@ -10,6 +10,7 @@
     { name: 'mermaid-diagrams' },
     { name: 'code-snippet' },
     { name: 'quiz', css: true },
+    { name: 'code-exercise', css: true },
     // Bob adds new widgets here, e.g. { name: 'flashcards', css: true },
   ];
 

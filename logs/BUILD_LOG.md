@@ -2,25 +2,26 @@
 
 ---
 
-## quiz — 2025-07-01
+## code_exercise
 
-**Files changed**
-- `frontend/renderer/widgets/quiz.js` — created
-- `frontend/renderer/widgets/quiz.css` — created
-- `frontend/renderer/widgets/manifest.js` — added `{ name: 'quiz', css: true }`
+**Date:** 2025-07  
+**Files changed:**
+- `frontend/renderer/widgets/code-exercise.js` — created
+- `frontend/renderer/widgets/code-exercise.css` — created
+- `frontend/renderer/widgets/manifest.js` — added `{ name: 'code-exercise', css: true }` after quiz
 
-**States implemented**
-- default: white card, header row (counter + chip), 4 px progress bar, bold question, hint, lettered option rows with empty radio circle
-- hover: `--uir-sage-tint` background, `--uir-line-strong` border, letter badge turns white
-- selected-correct: full `--uir-slate` bg + white text + `--uir-ok` left border + filled check circle
-- selected-wrong: full `--uir-slate` bg + white text + `--uir-err` left border + filled check circle; correct option gets `--uir-ok` left border
-- revealed: explanation box (`--uir-sand`) appears below options; options lock (`aria-disabled`)
-- navigation memory: going back shows the previously chosen answer still selected/revealed, options locked
-- results screen: "X of N correct" score, contextual label, Retry button resets all answers and returns to Q1
-- keyboard: arrow keys move focus between options; Enter/Space selects; Prev/Next/Retry are reachable via Tab
+**States implemented:**
+- Default (no answer chosen)
+- Hover (option highlight, letter badge lightens)
+- Selected / correct (slate bg, green left border, checkmark)
+- Wrong (slate bg, red left border, X mark)
+- Revealed / locked (all options locked, explanation shown)
+- Results screen (inherited from `questionFlow`)
 
-**Reusable API**
-- `window.UIRPractice.questionFlow(questions, { unitLabel, chipLabel })` — usable by `code_exercise`
+**Design matched:** `docs/renderer/design/code-exercise.png`  
+Repository context box: white card, 1px `--uir-line` border, `--uir-radius-sm`, dot + bold repo_label + teal scope on row 1, mono breadcrumb with bold last segment on row 2.  
+Code panel: `ctx.codePanel(...)` inserted between hint and options via `renderContext` hook.  
+Options: letter badge stays vertically centred at top via `align-items: flex-start` + `uir-quiz--code-exercise` modifier class.
 
-**Not matched / notes**
-- None. All design states and spec additions matched.
+**Not matched / notes:**
+- None. All design states reproduced. Keyboard (arrow keys, Enter, Space, Tab) and results screen fully inherited from `questionFlow`.
