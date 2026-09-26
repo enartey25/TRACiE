@@ -46,7 +46,7 @@ async function getIamToken() {
     });
 
     cachedToken = response.data.access_token;
-    tokenExpiresAt = response.data.expiration || now + response.data.expires_in || now + 3600;
+    tokenExpiresAt = response.data.expiration || (now + (response.data.expires_in || 3600));
     return cachedToken;
   } catch (error) {
     const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;

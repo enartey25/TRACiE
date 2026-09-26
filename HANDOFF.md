@@ -61,7 +61,7 @@ Webhook test with the server running: `npm run test:webhook -- expressjs/cors ma
 ## Notes per teammate
 
 ### Ethan
-- **I patched `src/services/rag/retriever.js` on the `Gabriel` branch.** The old version called Chroma's removed `/api/v1` API on localhost, so it always fell back to sample chunks. The patch adds a block at the top of `retrieveCodeChunks` that calls `queryChunks()` from `src/db/chroma.js`, which works with both Chroma Cloud and a local server. It returns **code chunks only**, and your fallback below it is unchanged. Your branch has a newer `retriever.js`, so when merging, keep the block marked `[Gabriel]` and your new fallback.
+- **I patched `src/services/rag/retriever.js` on the `Gabriel` branch.** The old version called Chroma's removed `/api/v1` API on localhost, so it always fell back to sample chunks. The patch adds a block at the top of `retrieveCodeChunks` that calls `queryChunks()` from `src/db/chroma.js`, which works with both Chroma Cloud and a local server. It returns **code chunks only**, and your fallback below it is unchanged. `rag-api-connections` has been merged into `Gabriel` (conflicts resolved, both sides kept), so the block marked `[Gabriel]` now sits on top of your latest retriever.
   - To bring git history into answers, call `queryChunks({ ..., chunkTypes: ['commit', 'pull_request'] })`. History chunks have no file or line numbers, so cite them using `metadata.url`.
   - `repoId` should be the `repositoryId` UUID from `/api/repos`. A non-UUID such as `"TRACiE"` searches all indexed repos.
 - **Logging chat turns to Postgres is one line in `pipeline.js`,** after the widget is built:

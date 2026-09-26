@@ -4,6 +4,9 @@ const config = require('./config/watsonx');
 const { verifyAuth } = require('./services/watsonx/auth');
 const queryRouter = require('./routes/query');
 const streamRouter = require('./routes/stream');
+const sessionRouter = require('./routes/session');
+const docsRouter = require('./routes/docs');
+const audioRouter = require('./routes/audio');
 const fixtures = require('./contracts/fixtures');
 const reposRouter = require('./routes/repos');
 const webhooksRouter = require('./routes/webhooks');
@@ -56,9 +59,12 @@ app.get('/api/fixtures/:type', (req, res) => {
   }
 });
 
-// Ethan's Core Routes
+// Ethan's Core Routes (Phase 1 & Phase 2)
 app.use('/api', queryRouter);
 app.use('/api', streamRouter);
+app.use('/api', sessionRouter);
+app.use('/api', docsRouter);
+app.use('/api', audioRouter);
 
 // Gabriel's Repository Ingestion Routes
 app.use('/api', reposRouter);

@@ -49,23 +49,11 @@ async function handleStream(req, res) {
 
     if (!isClientConnected) return;
 
-    sendEvent('status', { stage: 'generating', message: 'Streaming response payload...' });
-
-    // Simulate token-by-token streaming if response is text/JSON
-    const serialized = JSON.stringify(widget, null, 2);
-    const chunkSize = 20;
-
-    for (let i = 0; i < serialized.length; i += chunkSize) {
-      if (!isClientConnected) return;
-      const slice = serialized.substring(i, i + chunkSize);
-      sendEvent('token', { delta: slice });
-      // Small tick for realistic stream feel
-      await new Promise(r => setTimeout(r, 15));
-    }
-
     if (!isClientConnected) return;
 
-    // Send final complete payload containing full widget object
+    sendEvent('status', { stage: 'delivering', message: 'Rendering dynamic widget...' });
+
+    // Send final complete payload containing full widget object immediately
     sendEvent('complete', widget);
     sendEvent('done', { status: 'success' });
     res.end();
