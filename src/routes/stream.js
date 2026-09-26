@@ -49,8 +49,6 @@ async function handleStream(req, res) {
 
     if (!isClientConnected) return;
 
-    if (!isClientConnected) return;
-
     sendEvent('status', { stage: 'delivering', message: 'Rendering dynamic widget...' });
 
     // Send final complete payload containing full widget object immediately

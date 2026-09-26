@@ -2,9 +2,10 @@
   "name": "tracie",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
     "test": "node src/scripts/test-rag-pipeline.js",
     "test:auth": "node src/scripts/test-watsonx-auth.js",
     "test:rag": "node src/scripts/test-rag-pipeline.js",
