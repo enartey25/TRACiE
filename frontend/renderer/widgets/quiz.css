@@ -1,0 +1,310 @@
+/* ============================================================
+   quiz.css  –  UIRenderer quiz (bare) widget
+   BEM: .uir-quiz__<part>
+   ============================================================ */
+
+/* ---------- card shell ---------- */
+.uir-quiz {
+  background: var(--uir-card);
+  border: 1px solid var(--uir-line);
+  border-radius: var(--uir-radius);
+  padding: 22px;
+  font-family: var(--uir-sans);
+  color: var(--uir-text);
+}
+
+/* ---------- header row ---------- */
+.uir-quiz__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.uir-quiz__counter {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--uir-text);
+}
+
+.uir-quiz__chip {
+  background: var(--uir-sage-soft);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--uir-text);
+}
+
+/* ---------- progress bar ---------- */
+.uir-quiz__progress-track {
+  height: 4px;
+  background: var(--uir-sage-soft);
+  border-radius: 999px;
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.uir-quiz__progress-fill {
+  height: 100%;
+  background: var(--uir-slate);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uir-quiz__progress-fill { transition: none; }
+}
+
+/* ---------- question ---------- */
+.uir-quiz__question {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 6px;
+  color: var(--uir-text);
+  font-family: var(--uir-sans);
+}
+
+.uir-quiz__hint {
+  font-size: 0.82rem;
+  color: var(--uir-soft-text);
+  margin: 0 0 18px;
+}
+
+/* ---------- options list ---------- */
+.uir-quiz__options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  list-style: none;
+  padding: 0;
+  margin-top: 0;
+}
+
+/* ---------- single option button ---------- */
+.uir-quiz__option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--uir-card);
+  border: 1px solid var(--uir-line);
+  border-radius: var(--uir-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--uir-sans);
+  font-size: 0.92rem;
+  color: var(--uir-text);
+  transition: background 0.15s, border-color 0.15s;
+  position: relative;
+}
+
+.uir-quiz__option:focus-visible {
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+}
+
+/* hover */
+.uir-quiz__option:not([aria-disabled="true"]):not(.is-selected):not(.is-correct):not(.is-wrong):hover {
+  background: var(--uir-sage-tint);
+  border-color: var(--uir-line-strong);
+}
+.uir-quiz__option:not([aria-disabled="true"]):not(.is-selected):not(.is-correct):not(.is-wrong):hover .uir-quiz__letter {
+  background: #fff;
+}
+
+/* selected (slate bg, white text) */
+.uir-quiz__option.is-selected {
+  background: var(--uir-slate);
+  border-color: var(--uir-slate);
+  color: #fff;
+}
+.uir-quiz__option.is-selected .uir-quiz__letter {
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+}
+.uir-quiz__option.is-selected .uir-quiz__radio { display: none; }
+.uir-quiz__option.is-selected .uir-quiz__check { display: flex; }
+/* show the correct check icon for any revealed correct option */
+.uir-quiz__option.is-correct .uir-quiz__check--ok  { display: flex; }
+.uir-quiz__option.is-wrong   .uir-quiz__check--err { display: flex; }
+
+/* revealed: correct (not chosen) */
+.uir-quiz__option.is-correct {
+  background: var(--uir-sage-tint);
+  border-left: 4px solid var(--uir-ok);
+}
+/* revealed: correct AND chosen — keep slate bg, swap to green left border */
+.uir-quiz__option.is-selected.is-correct {
+  background: var(--uir-slate);
+  border-color: var(--uir-slate);
+  border-left: 4px solid var(--uir-ok);
+}
+
+/* revealed: wrong chosen */
+.uir-quiz__option.is-wrong {
+  background: var(--uir-slate);
+  border-color: var(--uir-slate);
+  border-left: 4px solid var(--uir-err);
+  color: #fff;
+}
+.uir-quiz__option.is-wrong .uir-quiz__letter {
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+}
+.uir-quiz__option.is-wrong .uir-quiz__radio { display: none; }
+.uir-quiz__option.is-wrong .uir-quiz__check { display: flex; }
+
+/* locked: no pointer */
+.uir-quiz__option[aria-disabled="true"] {
+  cursor: default;
+}
+
+/* ---------- letter badge ---------- */
+.uir-quiz__letter {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--uir-radius-sm);
+  background: var(--uir-sage-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--uir-text);
+  transition: background 0.15s, color 0.15s;
+}
+
+/* ---------- option text ---------- */
+.uir-quiz__opt-text {
+  flex: 1;
+}
+
+/* ---------- radio / check circle (right side) ---------- */
+.uir-quiz__radio,
+.uir-quiz__check {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin-left: auto;
+}
+
+.uir-quiz__radio {
+  border: 1.5px solid var(--uir-line);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.uir-quiz__check {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--uir-teal);
+  border: none;
+}
+/* green check – correct option (chosen or unchosen reveal) */
+.uir-quiz__check--ok {
+  background: var(--uir-ok);
+  display: none;
+}
+/* red X – wrong chosen option */
+.uir-quiz__check--err {
+  background: var(--uir-err);
+  display: none;
+}
+.uir-quiz__check svg {
+  width: 12px;
+  height: 12px;
+  stroke: #fff;
+  stroke-width: 2.5;
+  fill: none;
+}
+
+/* ---------- explanation box ---------- */
+.uir-quiz__explanation {
+  background: var(--uir-sand);
+  border-radius: var(--uir-radius-sm);
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  color: var(--uir-text);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+/* ---------- footer ---------- */
+.uir-quiz__divider {
+  border: none;
+  border-top: 1px solid var(--uir-line);
+  margin: 0 0 16px;
+}
+
+.uir-quiz__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.uir-quiz__btn {
+  border-radius: 999px;
+  padding: 9px 20px;
+  font-family: var(--uir-sans);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+  border: 1.5px solid transparent;
+}
+
+.uir-quiz__btn--outline {
+  background: transparent;
+  border-color: var(--uir-line-strong);
+  color: var(--uir-text);
+}
+.uir-quiz__btn--outline:hover:not(:disabled) {
+  background: var(--uir-sage-tint);
+}
+
+.uir-quiz__btn--solid {
+  background: var(--uir-slate);
+  color: #fff;
+  border-color: var(--uir-slate);
+}
+.uir-quiz__btn--solid:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.uir-quiz__btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.uir-quiz__btn:focus-visible {
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+}
+
+/* ---------- results screen ---------- */
+.uir-quiz__results {
+  text-align: center;
+  padding: 24px 0 8px;
+}
+
+.uir-quiz__score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--uir-text);
+  margin-bottom: 8px;
+}
+
+.uir-quiz__score-label {
+  font-size: 0.88rem;
+  color: var(--uir-muted);
+  margin-bottom: 24px;
+}
