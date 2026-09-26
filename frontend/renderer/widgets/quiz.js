@@ -64,13 +64,17 @@
      questionFlow – the reusable engine
      questions : [{ question, hint, options[], answer_index, explanation }]
      opts      : {
-       unitLabel     – counter suffix, e.g. "quizzes"
-       chipLabel     – pill text, e.g. "Quiz"
-       renderContext – function(q, ctx) → Node|null  inserted between hint
-                       and options; called on every render incl. back-nav;
-                       errors are caught and shown as a notice, never thrown
-       ctx           – UIRenderer ctx object passed from render(); forwarded
-                       to renderContext so it can use ctx.codePanel etc.
+       unitLabel      – counter suffix, e.g. "quizzes"
+       chipLabel      – pill text, e.g. "Quiz"
+       renderPreface  – function(q, ctx) → Node|null  inserted directly
+                        BEFORE the question title; same try/catch and
+                        back-nav rules as renderContext
+       renderContext  – function(q, ctx) → Node|null  inserted between hint
+                        and options; called on every render incl. back-nav;
+                        errors are caught and shown as a notice, never thrown
+       ctx            – UIRenderer ctx object passed from render(); forwarded
+                        to renderPreface and renderContext so they can use
+                        ctx.codePanel etc.
      }
      returns   : HTMLElement (the card)
   ══════════════════════════════════════════════════════════ */
@@ -98,6 +102,7 @@
     const track = h('div', { 'class': 'uir-quiz__progress-track' }, fill);
 
     /* ── question body ── */
+    const renderPrefaceEl = h('div', { 'class': 'uir-quiz__render-preface' });
     const questionEl      = h('p',   { 'class': 'uir-quiz__question' });
     const hintEl          = h('p',   { 'class': 'uir-quiz__hint' });
     const renderContextEl = h('div', { 'class': 'uir-quiz__render-context' });
@@ -130,7 +135,7 @@
     const resultsDiv = h('div', { 'class': 'uir-quiz__results' }, scoreEl, scoreLabelEl,
       h('div', { style: 'margin-top:16px' }, retryBtn));
 
-    card.append(header, track, questionEl, hintEl, renderContextEl, optionsList, explanationEl, divider, footer);
+    card.append(header, track, renderPrefaceEl, questionEl, hintEl, renderContextEl, optionsList, explanationEl, divider, footer);
 
     /* ── build option rows ── */
     function buildOptions(q, qIndex) {
@@ -195,6 +200,28 @@
       render(qIndex);
     }
 
+    /* ── renderPreface slot: goes directly before the question title ── */
+    function updateRenderPreface(q) {
+      renderPrefaceEl.innerHTML = '';
+      if (typeof opts.renderPreface !== 'function') {
+        renderPrefaceEl.style.display = 'none';
+        return;
+      }
+      var node;
+      try {
+        node = opts.renderPreface(q, ctx);
+      } catch (err) {
+        node = h('div', { 'class': 'uir-notice uir-notice--warning', role: 'alert' },
+          'renderPreface error: ' + (err && err.message ? err.message : String(err)));
+      }
+      if (node instanceof Node) {
+        renderPrefaceEl.appendChild(node);
+        renderPrefaceEl.style.display = '';
+      } else {
+        renderPrefaceEl.style.display = 'none';
+      }
+    }
+
     /* ── renderContext slot: called on every render, errors caught ── */
     function updateRenderContext(q) {
       renderContextEl.innerHTML = '';
@@ -227,6 +254,9 @@
       // header + progress
       counterEl.textContent = (idx + 1) + ' of ' + total + ' ' + unitLabel;
       fill.style.width = ((idx + 1) / total * 100) + '%';
+
+      // preface slot (directly before question title)
+      updateRenderPreface(q);
 
       // question
       questionEl.textContent = q.question || '';
@@ -284,6 +314,7 @@
       optionsList.style.display      = 'none';
       questionEl.style.display       = 'none';
       hintEl.style.display           = 'none';
+      renderPrefaceEl.style.display  = 'none';
       renderContextEl.style.display  = 'none';
       explanationEl.style.display    = 'none';
       divider.style.display          = 'none';
