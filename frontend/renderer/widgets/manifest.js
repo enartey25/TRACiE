@@ -18,6 +18,12 @@
     { name: 'definition', css: true },
     { name: 'faq', css: true },
     { name: 'paths', css: true },
+    { name: 'flowchart', css: true },
+    { name: 'class-diagram', css: true },
+    { name: 'er-diagram', css: true },
+    { name: 'database-schema', css: true },
+    { name: 'api-flow', css: true },
+    { name: 'commit-history', css: true },
   ];
 
   const me = document.currentScript;

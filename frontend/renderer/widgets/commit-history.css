@@ -1,0 +1,126 @@
+/* commit_history / timeline widget */
+
+.uir-commit-history {
+  position: relative;
+  padding: 4px 0 2px;
+}
+
+/* vertical rail */
+.uir-commit-history__rail {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 11px;
+  width: 2px;
+  background: var(--uir-line-strong);
+  border-radius: 999px;
+}
+
+/* list */
+.uir-commit-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* single row */
+.uir-commit-history__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 8px 10px 0;
+  border-radius: var(--uir-radius-sm);
+  transition: background 0.15s ease;
+  position: relative;
+}
+
+.uir-commit-history__row:hover {
+  background: var(--uir-sage-tint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uir-commit-history__row { transition: none; }
+}
+
+/* dot column */
+.uir-commit-history__dot-col {
+  flex-shrink: 0;
+  width: 24px;
+  display: flex;
+  justify-content: center;
+  padding-top: 3px;
+}
+
+.uir-commit-history__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--uir-line-strong);
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.uir-commit-history__dot--first {
+  background: var(--uir-teal);
+  border-color: var(--uir-teal);
+}
+
+/* content column */
+.uir-commit-history__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.uir-commit-history__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.uir-commit-history__sha {
+  font-family: var(--uir-mono);
+  font-size: 0.72rem;
+  background: var(--uir-sage-tint);
+  border: 1px solid var(--uir-line-strong);
+  border-radius: var(--uir-radius-sm);
+  padding: 1px 6px;
+  color: var(--uir-soft-text);
+  white-space: nowrap;
+}
+
+.uir-commit-history__when {
+  font-size: 0.78rem;
+  color: var(--uir-soft-text);
+  white-space: nowrap;
+}
+
+.uir-commit-history__tag {
+  font-size: 0.72rem;
+  background: var(--uir-sage-tint);
+  border: 1px solid var(--uir-line-strong);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--uir-soft-text);
+  white-space: nowrap;
+}
+
+.uir-commit-history__message {
+  font-family: var(--uir-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--uir-text, inherit);
+  margin: 0 0 3px;
+  word-break: break-word;
+}
+
+.uir-commit-history__detail {
+  font-size: 0.8rem;
+  color: var(--uir-soft-text);
+  margin: 0;
+  word-break: break-word;
+}
