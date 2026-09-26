@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "TRACiE Widget Response Schema",
-  "description": "Structured JSON contract between the LLM RAG pipeline and Romel's UIRenderer / Newlove's frontend.",
+  "title": "TRACiE Widget Response Schema (Phase 1 & 2 Complete)",
+  "description": "Comprehensive structured JSON contract between TRACiE multi-agent backend and Romel's UIRenderer / Newlove's frontend.",
   "type": "object",
   "required": ["type"],
   "properties": {
@@ -14,7 +14,13 @@
         "architecture_diagram",
         "key_value_list",
         "composite_dashboard",
-        "alert_card"
+        "alert_card",
+        "quiz",
+        "flashcard_deck",
+        "tutorial_steps",
+        "learning_path",
+        "doc_proposal",
+        "audio_player"
       ]
     },
     "citations": {
@@ -29,6 +35,19 @@
           "snippet": { "type": "string" }
         }
       }
+    },
+    "external_references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "url"],
+        "properties": {
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "source": { "type": "string", "enum": ["MDN", "npm", "PyPI", "official_docs", "academic_paper"] },
+          "description": { "type": "string" }
+        }
+      }
     }
   },
   "definitions": {
@@ -38,7 +57,8 @@
       "properties": {
         "type": { "const": "chat_response" },
         "content": { "type": "string", "description": "Markdown formatted explanation" },
-        "citations": { "$ref": "#/properties/citations" }
+        "citations": { "$ref": "#/properties/citations" },
+        "external_references": { "$ref": "#/properties/external_references" }
       }
     },
     "code_snippet": {
@@ -130,6 +150,130 @@
         "severity": { "type": "string", "enum": ["info", "warning", "error", "success"] },
         "title": { "type": "string" },
         "message": { "type": "string" }
+      }
+    },
+    "quiz": {
+      "type": "object",
+      "required": ["type", "question", "options", "correct_index", "explanation"],
+      "properties": {
+        "type": { "const": "quiz" },
+        "question": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "correct_index": { "type": "integer" },
+        "explanation": { "type": "string" },
+        "code_context": { "type": "string" }
+      }
+    },
+    "flashcard_deck": {
+      "type": "object",
+      "required": ["type", "title", "cards"],
+      "properties": {
+        "type": { "const": "flashcard_deck" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["front", "back"],
+            "properties": {
+              "id": { "type": "string" },
+              "front": { "type": "string", "description": "Concept or Question" },
+              "back": { "type": "string", "description": "Explanation or Code Answer" },
+              "tag": { "type": "string" },
+              "citation": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "tutorial_steps": {
+      "type": "object",
+      "required": ["type", "title", "steps"],
+      "properties": {
+        "type": { "const": "tutorial_steps" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "prerequisites": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["step_number", "title", "instructions"],
+            "properties": {
+              "step_number": { "type": "integer" },
+              "title": { "type": "string" },
+              "instructions": { "type": "string" },
+              "code": { "type": "string" },
+              "file_path": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "learning_path": {
+      "type": "object",
+      "required": ["type", "title", "modules"],
+      "properties": {
+        "type": { "const": "learning_path" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "target_role": { "type": "string" },
+        "estimated_hours": { "type": "number" },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["module_id", "title", "topics"],
+            "properties": {
+              "module_id": { "type": "string" },
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "topics": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "milestones": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "doc_proposal": {
+      "type": "object",
+      "required": ["type", "target_file", "diff_markdown", "rationale", "pr_title"],
+      "properties": {
+        "type": { "const": "doc_proposal" },
+        "proposal_id": { "type": "string" },
+        "target_file": { "type": "string" },
+        "diff_markdown": { "type": "string", "description": "Git-style unified diff (+/- lines)" },
+        "rationale": { "type": "string" },
+        "pr_title": { "type": "string" },
+        "pr_body": { "type": "string" },
+        "affected_components": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "audio_player": {
+      "type": "object",
+      "required": ["type", "title", "transcript"],
+      "properties": {
+        "type": { "const": "audio_player" },
+        "title": { "type": "string" },
+        "transcript": { "type": "string" },
+        "audio_url": { "type": "string" },
+        "duration_seconds": { "type": "number" }
       }
     }
   }

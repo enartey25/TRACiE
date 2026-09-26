@@ -4,17 +4,22 @@ const { retrieveCodeChunks } = require('./retriever');
 const { buildRAGPrompt } = require('../../prompts/promptTemplates');
 const { parseAndValidateWidgetJSON } = require('./jsonParser');
 const { orchestrateAgents } = require('../agents/supervisor');
+const { recordTurn, getFormattedHistoryForPrompt } = require('../memory/sessionMemory');
+const { detectExternalReferences, formatExternalReferencesForPrompt } = require('../enrichment/contextEnricher');
 
 /**
  * Executes the complete RAG Query Pipeline for developer queries.
- * Routes through the IBM Bee-Style Multi-Agent system when Groq is active,
- * or through the direct watsonx.ai client.
+ * Integrates:
+ * 1. Semantic vector retrieval (ChromaDB)
+ * 2. Multi-turn session memory (sessionMemory)
+ * 3. External documentation enrichment (MDN, npm, RFC standards)
+ * 4. IBM BeeAI multi-agent orchestration
  *
  * @param {object} params
  * @param {string} params.query - Developer natural language question.
  * @param {string} [params.repoId] - Target repository identifier.
  * @param {string} [params.sessionId] - Conversation session identifier.
- * @param {Array<object>} [params.conversationHistory] - Prior turns.
+ * @param {Array<object>} [params.conversationHistory] - Explicit prior turns (optional).
  * @param {Function} [params.onThought] - Callback for agent thoughts and streaming events.
  * @returns {Promise<object>} - Validated UI Widget JSON object.
  */
@@ -30,6 +35,7 @@ async function executeRAGQuery({ query, repoId, sessionId, conversationHistory =
 
   // 2. Retrieve top-k nearest code chunks from ChromaDB
   const chunks = await retrieveCodeChunks({
+    query,
     queryEmbedding,
     repoId,
     topK: 5
@@ -42,13 +48,24 @@ async function executeRAGQuery({ query, repoId, sessionId, conversationHistory =
     snippet: (c.content || '').substring(0, 150)
   }));
 
+  // 3. Multi-Turn Session Memory Lookup
+  const sessionHistoryText = sessionId
+    ? getFormattedHistoryForPrompt(sessionId, 4)
+    : (conversationHistory.length > 0 ? JSON.stringify(conversationHistory) : '');
+
+  // 4. External Documentation & Standards Enrichment (FR-33, FR-34)
+  const externalRefs = detectExternalReferences({ chunks, query, maxReferences: 3 });
+  const externalContextText = formatExternalReferencesForPrompt(externalRefs);
+
   let widget;
 
-  // 3. Execution: Multi-Agent System (Groq) or Direct Pipeline (watsonx/mock)
+  // 5. Execution: Multi-Agent System (Groq) or Direct Pipeline (watsonx/mock)
   if (provider === 'groq' && process.env.GROQ_API_KEY) {
     widget = await orchestrateAgents({
       query,
       chunks,
+      conversationHistory: sessionHistoryText,
+      externalContext: externalContextText,
       onThought
     });
   } else {
@@ -56,7 +73,8 @@ async function executeRAGQuery({ query, repoId, sessionId, conversationHistory =
     const prompt = buildRAGPrompt({
       query,
       chunks,
-      conversationHistory
+      conversationHistory,
+      externalContext: externalContextText
     });
 
     const { generatedText, metadata } = await generateText({ prompt });
@@ -69,8 +87,18 @@ async function executeRAGQuery({ query, repoId, sessionId, conversationHistory =
   }
 
   // Guarantee citations if widget is chat_response and citations are missing
-  if (widget.type === 'chat_response' && (!widget.citations || widget.citations.length === 0)) {
-    widget.citations = fallbackCitations;
+  if (widget.type === 'chat_response') {
+    if (!widget.citations || widget.citations.length === 0) {
+      widget.citations = fallbackCitations;
+    }
+    if (!widget.external_references || widget.external_references.length === 0) {
+      widget.external_references = externalRefs;
+    }
+  }
+
+  // 6. Record turn in multi-turn memory
+  if (sessionId) {
+    recordTurn(sessionId, { query, widget });
   }
 
   // Attach session/execution telemetry
@@ -79,6 +107,7 @@ async function executeRAGQuery({ query, repoId, sessionId, conversationHistory =
     sessionId: sessionId || null,
     repoId: repoId || null,
     chunksRetrieved: chunks.length,
+    externalRefsMatched: externalRefs.length,
     provider: provider,
     timestamp: new Date().toISOString()
   };

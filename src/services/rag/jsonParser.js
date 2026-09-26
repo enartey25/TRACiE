@@ -12,7 +12,7 @@ function parseAndValidateWidgetJSON(rawText, fallbackContext = {}) {
       type: 'alert_card',
       severity: 'error',
       title: 'Empty Response',
-      message: 'watsonx.ai returned an empty or invalid response.'
+      message: 'The LLM returned an empty or invalid response.'
     };
   }
 
