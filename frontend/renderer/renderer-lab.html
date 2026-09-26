@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UIRenderer Lab · TRACiE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
+  <link href="./ui-renderer.css" rel="stylesheet" />
+  <style>
+    body { margin: 0; background: #FFFBF8; color: #2E3D45; font-family: Inter, sans-serif; }
+    .lab { display: grid; grid-template-columns: minmax(320px, 38%) 1fr; height: 100vh; }
+    .lab__left { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-right: 1px solid #C2CCC0; background: #fff; }
+    .lab__row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    select, button, label { font: inherit; font-size: .88rem; }
+    select, button { background: #fff; color: inherit; border: 1px solid #C2CCC0; border-radius: 999px; padding: 7px 12px; }
+    button { cursor: pointer; } button:hover { border-color: #516D6A; }
+    button.primary { background: #2E3D45; color: #fff; border-color: #2E3D45; }
+    textarea { flex: 1; resize: none; background: #F7F9F7; color: #2E3D45; border: 1px solid #C2CCC0; border-radius: 10px; padding: 12px; font: .8rem/1.5 'JetBrains Mono', monospace; }
+    .lab__right { overflow: auto; padding: 24px; }
+    .lab__meta { font: .78rem 'JetBrains Mono', monospace; color: #6A7877; }
+    #report { white-space: pre; max-height: 180px; overflow: auto; }
+    #bubble { background: #E8EFE8; border-radius: 10px; padding: 10px 12px; font-size: .88rem; }
+    @media (max-width: 860px) { .lab { grid-template-columns: 1fr; height: auto; } }
+  </style>
+</head>
+<body>
+  <main class="lab">
+    <section class="lab__left">
+      <div class="lab__row">
+        <select id="picker" aria-label="Fixture"></select>
+        <button class="primary" id="run" title="Ctrl/Cmd + Enter">Render</button>
+        <button id="all">Run all fixtures</button>
+      </div>
+      <div class="lab__row">
+        <label><input type="checkbox" id="hideHeader" /> Canvas mode (hide card header)</label>
+      </div>
+      <textarea id="editor" spellcheck="false" aria-label="JSON response">Loading…</textarea>
+      <div id="bubble" aria-label="Chat bubble preview">Chat bubble text appears here</div>
+      <div class="lab__meta" id="badge">badge: none</div>
+      <div class="lab__meta" id="report"></div>
+    </section>
+    <section class="lab__right" id="canvas" aria-live="polite"></section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="./ui-renderer.js"></script>
+  <script src="./widgets/manifest.js"></script>
+  <script src="./widget-fixtures.js"></script>
+  <script>
+    (async () => {
+      await window.UIRendererReady;
+      const $ = (id) => document.getElementById(id);
+      const canvas = $('canvas'), editor = $('editor'), picker = $('picker');
+      UIRenderer.setCanvas(canvas);
+
+      Object.keys(WIDGET_FIXTURES).forEach((k) => picker.append(new Option(k, k)));
+      const load = () => { editor.value = JSON.stringify(WIDGET_FIXTURES[picker.value], null, 2); };
+      const run = () => {
+        $('badge').textContent = 'badge: ' + UIRenderer.render(editor.value);
+        $('bubble').textContent = UIRenderer.messageOf(editor.value);
+      };
+
+      picker.onchange = () => { load(); run(); };
+      $('run').onclick = run;
+      $('hideHeader').onchange = (e) => { UIRenderer.setOptions({ hideHeader: e.target.checked }); run(); };
+      editor.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run(); });
+
+      // Regression suite (SRS 26.3): every fixture renders without throwing
+      $('all').onclick = () => {
+        const scratch = document.createElement('div');
+        let ok = 0, todo = 0, bad = 0;
+        const lines = Object.entries(WIDGET_FIXTURES).map(([k, fx]) => {
+          try {
+            const badge = UIRenderer.render(fx, scratch);
+            const status = badge === 'custom' ? (todo++, 'TODO') : (ok++, 'ok');
+            return `${status.padEnd(6)} ${k.padEnd(22)} ${badge}`;
+          } catch (e) { bad++; return `THROWS ${k.padEnd(22)} ${e.message}`; }
+        });
+        $('report').textContent = `ok ${ok} · todo ${todo} · THROWS ${bad}\n` + lines.join('\n');
+      };
+
+      load(); run();
+    })();
+  </script>
+</body>
+</html>
