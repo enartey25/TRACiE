@@ -1,0 +1,23 @@
+.uir-definition__phonetic {
+  text-align: right;
+  font-style: italic;
+  color: var(--uir-muted);
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+}
+
+.uir-definition__meta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--uir-teal);
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
+.uir-definition__body {
+  font-size: 1rem;
+  line-height: 1.65;
+  margin: 0;
+  color: var(--uir-text);
+}

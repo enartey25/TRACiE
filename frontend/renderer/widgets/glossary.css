@@ -1,0 +1,55 @@
+/* ── Glossary widget ──────────────────────────────────────────────── */
+
+.uir-glossary__body {
+  background: var(--uir-sand);
+  border-radius: var(--uir-radius-sm);
+  padding: 0;
+  overflow: hidden;
+}
+
+.uir-glossary__row {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--uir-line);
+  align-items: baseline;
+}
+
+.uir-glossary__row:last-child {
+  border-bottom: none;
+}
+
+.uir-glossary__term {
+  flex: 0 0 35%;
+  font-weight: 600;
+  color: var(--uir-text);
+  font-family: var(--uir-sans);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.uir-glossary__def {
+  flex: 1;
+  color: var(--uir-muted);
+  font-family: var(--uir-sans);
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Narrow screens ───────────────────────────────────────────────── */
+@media (max-width: 479px) {
+  .uir-glossary__row {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .uir-glossary__term {
+    flex: none;
+  }
+
+  .uir-glossary__def {
+    flex: none;
+  }
+}

@@ -13,6 +13,11 @@
     { name: 'code-exercise', css: true },
     { name: 'flashcards', css: true },
     { name: 'audio', css: true },
+    { name: 'overview', css: true },
+    { name: 'glossary', css: true },
+    { name: 'definition', css: true },
+    { name: 'faq', css: true },
+    { name: 'paths', css: true },
   ];
 
   const me = document.currentScript;
