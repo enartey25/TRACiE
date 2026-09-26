@@ -1,0 +1,113 @@
+/*
+ * UIRenderer core styles. Tokens sampled from Newlove's TRACiE designs.
+ * If Newlove defines --app-* tokens in the shell, they override these automatically.
+ * Widget specific styles live in widgets/<name>.css, never here.
+ */
+:root {
+  /* surfaces */
+  --uir-page: var(--app-page, #FFFBF8);          /* warm off white canvas */
+  --uir-card: var(--app-card, #FFFFFF);
+  --uir-sand: var(--app-sand, #F4F3ED);          /* glossary, layer cards, ER card body */
+  --uir-sage-tint: var(--app-sage-tint, #E8EFE8);/* FAQ items, highlighted layer, hover */
+  --uir-sage-soft: var(--app-sage-soft, #CAD2C5);/* chips, progress track, option letters */
+  --uir-code-bg: var(--app-code-bg, #F7F9F7);
+  /* lines */
+  --uir-line: var(--app-line, #C2CCC0);
+  --uir-line-strong: var(--app-line-strong, #A3B8A9);
+  /* accents */
+  --uir-sage: var(--app-sage, #86AB8E);          /* sidebar New chat green */
+  --uir-teal: var(--app-teal, #516D6A);          /* table headers, emphasised nodes */
+  --uir-slate: var(--app-slate, #2E3D45);        /* primary buttons, selected option, progress fill */
+  --uir-warm-chip: var(--app-warm-chip, #FAF5EB);
+  /* text */
+  --uir-text: var(--app-text, #2E3D45);
+  --uir-muted: var(--app-muted, #6A7877);
+  --uir-soft-text: var(--app-soft-text, #8CA19A);
+  /* status */
+  --uir-ok: #4F8A63;
+  --uir-warn: #B7862B;
+  --uir-err: #B4534B;
+  /* type */
+  --uir-serif: var(--app-serif, 'Playfair Display', Georgia, serif);
+  --uir-sans: var(--app-sans, 'Inter', system-ui, sans-serif);
+  --uir-mono: var(--app-mono, 'JetBrains Mono', ui-monospace, monospace);
+  /* shape */
+  --uir-radius: 14px;
+  --uir-radius-sm: 10px;
+  --uir-shadow: 0 1px 2px rgba(46, 61, 69, .04), 0 4px 16px rgba(46, 61, 69, .05);
+}
+
+/* ---------- standard card ---------- */
+.uir-card, .uir-bare { font-family: var(--uir-sans); color: var(--uir-text); margin: 0 0 16px; outline: none; animation: uir-in .28s ease-out both; }
+.uir-card { background: var(--uir-card); border: 1px solid var(--uir-line); border-radius: var(--uir-radius); padding: 22px 24px; box-shadow: var(--uir-shadow); }
+.uir-card:focus-visible, .uir-bare:focus-within { box-shadow: 0 0 0 2px var(--uir-teal); }
+@keyframes uir-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.uir-card__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.uir-eyebrow { font: 600 .68rem/1.2 var(--uir-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--uir-teal); margin-bottom: 6px; }
+.uir-card__title { font: 500 1.55rem/1.2 var(--uir-serif); margin: 0; color: var(--uir-text); }
+.uir-card__subtitle { margin: 6px 0 0; color: var(--uir-soft-text); font-size: .92rem; }
+.uir-badge { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font: 500 .72rem/1 var(--uir-sans);
+  color: var(--uir-teal); background: var(--uir-sage-tint); border-radius: 999px; padding: 6px 10px; }
+.uir-badge__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--uir-teal); }
+
+/* ---------- composite ---------- */
+.uir-composite__title { font: 500 1.9rem/1.15 var(--uir-serif); color: var(--uir-text); margin: 0 0 18px; }
+.uir-composite > :nth-child(3) { animation-delay: .06s; }
+.uir-composite > :nth-child(4) { animation-delay: .12s; }
+.uir-composite > :nth-child(n+5) { animation-delay: .18s; }
+
+/* ---------- text ---------- */
+.uir-md { line-height: 1.6; font-size: .95rem; }
+.uir-md :is(p, ul, ol) { margin: .45em 0; }
+.uir-md code, .uir-cite { font-family: var(--uir-mono); font-size: .84em; background: var(--uir-sand); padding: 1px 6px; border-radius: 6px; }
+.uir-points { margin: 10px 0 0; padding-left: 1.1em; color: var(--uir-muted); }
+.uir-card--warning { border-left: 3px solid var(--uir-warn); }
+.uir-card--tip, .uir-card--best_practice { border-left: 3px solid var(--uir-ok); }
+.uir-card--error { border-left: 3px solid var(--uir-err); }
+
+/* ---------- notices ---------- */
+.uir-notice { padding: 10px 12px; border-radius: var(--uir-radius-sm); margin: 0 0 10px; font-size: .88rem; background: var(--uir-sand); }
+.uir-notice--warning { border-left: 3px solid var(--uir-warn); }
+.uir-notice--error { border-left: 3px solid var(--uir-err); }
+.uir-notice--info { border-left: 3px solid var(--uir-teal); }
+
+/* ---------- code panel (design: session.ts card) ---------- */
+.uir-codepanel { background: var(--uir-code-bg); border: 1px solid var(--uir-line); border-radius: var(--uir-radius-sm); overflow: hidden; }
+.uir-codepanel__bar { display: flex; justify-content: space-between; padding: 10px 14px 4px; font-size: .8rem; }
+.uir-codepanel__file { font-weight: 600; color: var(--uir-text); }
+.uir-codepanel__lang { color: var(--uir-muted); }
+pre.uir-code { margin: 0; padding: 8px 14px 14px 3.2em; background: transparent !important; overflow: auto; max-height: 440px;
+  font: .8rem/1.65 var(--uir-mono); color: var(--uir-teal); text-shadow: none !important; }
+pre.uir-code code { font: inherit; color: inherit; background: none; text-shadow: none !important; }
+pre.uir-code.line-numbers .line-numbers-rows { border-right: 0; }
+pre.uir-code .line-numbers-rows > span::before { color: var(--uir-soft-text); }
+/* Muted sage syntax palette, matching the design instead of rainbow tokens */
+pre.uir-code .token.keyword, pre.uir-code .token.function { color: var(--uir-slate); font-weight: 500; }
+pre.uir-code .token.string, pre.uir-code .token.number { color: #5F8B72; }
+pre.uir-code .token.comment { color: var(--uir-soft-text); font-style: italic; }
+pre.uir-code .token.punctuation, pre.uir-code .token.operator { color: var(--uir-muted); background: none; }
+pre.uir-code .token.class-name, pre.uir-code .token.builtin { color: var(--uir-teal); }
+
+/* ---------- diagrams (Mermaid) ---------- */
+.uir-figure { margin: 0; }
+.uir-diagram { overflow: auto; min-height: 120px; display: grid; place-items: center; background: var(--uir-page); border-radius: var(--uir-radius-sm); padding: 12px; }
+.uir-diagram svg { max-width: 100%; height: auto; }
+.uir-figure figcaption { color: var(--uir-muted); font-size: .84rem; margin-top: 8px; text-align: center; }
+
+/* ---------- loading, empty, fallback ---------- */
+.uir-skeleton { width: 100%; height: 160px; border-radius: var(--uir-radius-sm);
+  background: linear-gradient(90deg, var(--uir-sand) 25%, var(--uir-sage-tint) 50%, var(--uir-sand) 75%); background-size: 200% 100%;
+  animation: uir-shimmer 1.2s infinite linear; }
+@keyframes uir-shimmer { to { background-position: -200% 0; } }
+.uir-empty { display: grid; place-items: center; gap: 8px; color: var(--uir-muted); font-family: var(--uir-sans); text-align: center;
+  padding: 64px 20px; border: 1px dashed var(--uir-line); border-radius: var(--uir-radius); }
+.uir-raw { margin-top: 10px; font-size: .82rem; color: var(--uir-muted); }
+.uir-raw summary { cursor: pointer; }
+.uir-icon { width: 18px; height: 18px; stroke-width: 1.75; color: var(--uir-teal); }
+
+/* ---------- citations ---------- */
+.uir-cites { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--uir-line); }
+.uir-cites__label { color: var(--uir-soft-text); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; margin-right: 4px; }
+
+@media (prefers-reduced-motion: reduce) { .uir-card, .uir-bare, .uir-skeleton { animation: none; } }
