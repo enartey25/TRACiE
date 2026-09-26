@@ -137,3 +137,36 @@
 **States:** default (header + zebra body), hover row (--uir-sage-tint, motion-safe only), empty (ctx.notice info)
 **Design matched:** Semantic `<table>` with `<thead>/<tbody>`; thead --uir-teal bg, white bold .82rem; zebra: even rows --uir-sand, odd rows --uir-card; hover --uir-sage-tint wrapped in prefers-reduced-motion:no-preference; first `<td>` per row 600 weight --uir-text, rest --uir-muted; 10px 14px padding; 1px --uir-line bottom border per cell; wrapper overflow-x:auto for narrow screens; border-collapse collapse + radius-sm. Two types (comparison, request_response) share one renderTable() function.
 **Not matched:** none.
+
+---
+
+## UIRenderer Audit Pass — SRS §7.4, 20.1, 23.2, 25, 26.3
+**Date:** 2025-07-17
+**Files changed:**
+- `widgets/code-snippet.js` — added empty-payload guard
+- `widgets/basic-text.js` — added explicit `label` for all 7 registered types
+- `widgets/mermaid-diagrams.js` — added explicit `label` for all 7 registered types
+- `widget-fixtures.js` — added `audio_empty`, `audio_bad_src` edge-case fixtures
+- `renderer-lab.html` — extended "Run all fixtures" with auto empty-payload pass (Pass 2)
+- `docs/renderer/GALLERY.md` — created (new file)
+- `docs/renderer/plans/uirenderer-audit-plan.md` — updated (plan revision + gap status)
+
+**Gaps resolved:**
+- GAP-K1 / GAP-K2 / GAP-K3 (keyboard): confirmed no code change needed — all interactive
+  buttons are native `<button type="button">` (Enter/Space fires click natively). Flashcards
+  footer buttons use `e.stopPropagation()` in their keydown handlers so Space/Enter does not
+  also flip the card.
+- GAP-E1 (code-snippet empty): `render(p, { codePanel, notice })` now returns
+  `notice('info', 'No code to display.')` when `!p || !p.code`.
+- GAP-E2 (empty-payload regression): renderer-lab.html "Run all fixtures" now runs a second
+  pass rendering `{ type, payload: {} }` for every type in `UIRenderer.list()`, reported as
+  `<type>_empty`. Two explicit audio edge-case fixtures added to widget-fixtures.js.
+- GAP-M1 (Mermaid lazy-load): confirmed — `loadMermaid()` is only called when
+  `DIAGRAM_TYPES.has(type) && typeof payload.diagram_source === 'string'`. Documented in
+  GALLERY.md.
+- GAP-G1 (GALLERY.md): created at `docs/renderer/GALLERY.md` — 40-row widget table,
+  Mermaid confirmation, empty-payload regression notes.
+- GAP-G2 (labels): `basic-text.js` and `mermaid-diagrams.js` now register with explicit
+  `label` for every type; `UIRenderer.list()` returns human-readable labels for all types.
+
+**Not matched / left out:** none — all confirmed gaps addressed.

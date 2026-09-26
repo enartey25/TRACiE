@@ -1,9 +1,18 @@
 /* Generic text cards for content types with no bespoke design.
  * payload: { body: markdown, points?: string[] }                                     */
 (function () {
-  const TYPES = ['chat_response', 'summary', 'explanation', 'tip', 'warning', 'best_practice', 'citation'];
-  TYPES.forEach((type) => UIRenderer.register(type, {
+  const LABELS = {
+    chat_response: 'Chat response',
+    summary:       'Summary',
+    explanation:   'Explanation',
+    tip:           'Tip',
+    warning:       'Warning',
+    best_practice: 'Best practice',
+    citation:      'Citation',
+  };
+  Object.keys(LABELS).forEach((type) => UIRenderer.register(type, {
     category: 'Content and Guidance',
+    label: LABELS[type],
     render(p, { h, safeMarkdown }) {
       return h('div', { class: `uir-text uir-text--${type}` },
         safeMarkdown(p.body),
