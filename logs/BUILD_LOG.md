@@ -99,3 +99,41 @@
 **States:** default (full render), empty (notice when `classes` missing or empty array)
 **Design matched:** diagrams.png class diagram spec — responsive 3-column CSS grid of class boxes (collapses to 2-col ≤900px, 1-col ≤640px); each box has tone-colored header bar (`--uir-slate` for dark, `--uir-teal` for green, `--uir-muted` for grey) with white bold name and optional italic `«stereotype»`; `--uir-sand` attribute section with mono font; white method section with mono font; sections divided by `--uir-line-strong` 1px border; relations listed below grid in `--uir-soft-text` mono text: `extends` shown as `↑ extends`, `association` shown as `◇──  from_card ── label ── to_card ── to`.
 **Not matched:** none.
+
+---
+
+## checklist — Workflows
+**Date:** 2025-07-15
+**Files:** `widgets/checklist.js`, `widgets/checklist.css`, manifest line `{ name: 'checklist', css: true }`
+**States:** default (unchecked), checked item (strikethrough + --uir-soft-text), all-done (--uir-sage-tint list bg + banner), empty (ctx.notice info), hover (--uir-sage-tint row bg)
+**Design matched:** Same visual language as existing widgets — stacked list with `1px solid --uir-line` border + `--uir-radius-sm`; rows flex with gap 10px padding 10px 12px; native `<input type="checkbox">` with `accent-color: --uir-teal`; done label `text-decoration: line-through + --uir-soft-text`; counter pill `--uir-sand` bg + `--uir-mono`; all-done banner `--uir-sage-tint`; keyboard: native checkbox (Space toggles); focus-visible outline `--uir-teal`; prefers-reduced-motion guard.
+**Fixture:** pre-existing in widget-fixtures.js
+**Not matched:** none.
+
+---
+
+## steps (tutorial / learning_path / workflow) — Workflows
+**Date:** 2025-07-15
+**Files:** `widgets/steps.js`, `widgets/steps.css`, manifest line `{ name: 'steps', css: true }`; fixtures added for `learning_path` and `workflow` in widget-fixtures.js
+**States:** default (numbered teal circle + title + markdown body), completed step (--uir-ok circle + ✓ checkmark), last step (connector line hidden via :last-child), progress bar (learning_path only: N of M label + 6px track/fill), empty (ctx.notice info)
+**Design matched:** 32px left column with 28px circle (--uir-teal, white text, 600 weight); vertical 2px --uir-line connector flex-1; right column flex-1 with 24px bottom padding (0 for last); title .9rem bold --uir-text; body via safeMarkdown + --uir-muted; progress bar --uir-sage-soft track + --uir-slate fill + 999px radius; prefers-reduced-motion disables fill transition. All three types share one renderSteps() function — type parameter controls progress bar and done-circle behaviour.
+**Not matched:** none.
+
+---
+
+## diff — Code and Files
+**Date:** 2025-07-15
+**Files:** `widgets/diff.js`, `widgets/diff.css`, manifest line `{ name: 'diff', css: true }`
+**States:** default (context, add, del, hunk rows), empty/missing patch (ctx.notice info)
+**Design matched:** Reuses `.uir-codepanel` outer shell (--uir-code-bg bg, 1px --uir-line border, --uir-radius-sm) with `.uir-codepanel__bar` header (file_name bold mono left, "diff" label right); unified diff parsed line-by-line: `+` rows --uir-sage-tint, `-` rows local `--uir-diff-del: #FDECEA`, `@@` hunk rows --uir-sand italic, context rows transparent; 28px prefix column (--uir-ok for +, --uir-err for −, --uir-muted for hunk); `.uir-diff__line` white-space:pre + overflow-x:auto for long lines; `+++`/`---` file header lines skipped.
+**Fixture:** pre-existing in widget-fixtures.js
+**Not matched:** none.
+
+---
+
+## table (comparison / request_response) — Content and Guidance / Code and Files
+**Date:** 2025-07-15
+**Files:** `widgets/table.js`, `widgets/table.css`, manifest line `{ name: 'table', css: true }`; fixtures added for `comparison` and `request_response` in widget-fixtures.js
+**States:** default (header + zebra body), hover row (--uir-sage-tint, motion-safe only), empty (ctx.notice info)
+**Design matched:** Semantic `<table>` with `<thead>/<tbody>`; thead --uir-teal bg, white bold .82rem; zebra: even rows --uir-sand, odd rows --uir-card; hover --uir-sage-tint wrapped in prefers-reduced-motion:no-preference; first `<td>` per row 600 weight --uir-text, rest --uir-muted; 10px 14px padding; 1px --uir-line bottom border per cell; wrapper overflow-x:auto for narrow screens; border-collapse collapse + radius-sm. Two types (comparison, request_response) share one renderTable() function.
+**Not matched:** none.
