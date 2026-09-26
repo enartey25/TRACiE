@@ -350,6 +350,58 @@ window.WIDGET_FIXTURES = {
     payload: { steps: [{ title: 'Create the handler', body: 'Add a file in `backend/routes`.' }, { title: 'Register it', body: 'Import it in `backend/index.ts`.' }] },
   },
 
+  comparison: {
+    type: 'comparison',
+    title: 'SQL vs NoSQL',
+    payload: {
+      columns: ['Feature', 'PostgreSQL (SQL)', 'MongoDB (NoSQL)'],
+      rows: [
+        ['Schema', 'Strict, predefined', 'Flexible, dynamic'],
+        ['Joins', 'Native SQL JOINs', 'Manual or $lookup'],
+        ['Transactions', 'Full ACID', 'Multi-doc since 4.0'],
+        ['Scaling', 'Vertical + read replicas', 'Horizontal sharding'],
+        ['Best for', 'Structured relational data', 'Unstructured / varied data'],
+      ],
+    },
+  },
+
+  request_response: {
+    type: 'request_response',
+    title: 'POST /auth/login',
+    payload: {
+      columns: ['Field', 'Type', 'Description'],
+      rows: [
+        ['email', 'string', 'User email address'],
+        ['password', 'string', 'Plaintext password (TLS required)'],
+        ['→ token', 'string (JWT)', 'Signed JWT valid for 30 days'],
+        ['→ expiresAt', 'ISO 8601', 'Expiry timestamp of the session'],
+      ],
+    },
+  },
+
+  learning_path: {
+    type: 'learning_path',
+    title: 'Onboarding path',
+    payload: { steps: [
+      { title: 'Read the README', body: 'Start with `README.md` for a project overview.', done: true },
+      { title: 'Run the dev server', body: 'Follow the setup guide in `docs/setup.md`.', done: true },
+      { title: 'Explore the codebase', body: 'Browse `backend/` and `frontend/` directories.' },
+      { title: 'Make your first change', body: 'Pick a small issue and open a pull request.' },
+    ]},
+  },
+
+  workflow: {
+    type: 'workflow',
+    title: 'Deploy to production',
+    payload: { steps: [
+      { title: 'Run tests', body: 'Execute `npm test` and ensure all pass.' },
+      { title: 'Build the image', body: 'Run `docker build -t app:latest .`' },
+      { title: 'Push to registry', body: 'Push with `docker push registry/app:latest`.' },
+      { title: 'Apply migrations', body: 'Run `npm run db:migrate` on the target environment.' },
+      { title: 'Deploy', body: 'Trigger the deployment pipeline in CI.' },
+    ]},
+  },
+
   /* ================= COMPOSITE (the demo opener) ================= */
 
   composite: {
