@@ -102,3 +102,34 @@ Streams real-time agent thoughts and token deltas:
 
 ### 3. `GET /api/fixtures`
 Returns mock fixtures for all Phase 1 widgets for offline UI testing.
+
+---
+
+## Backend Infrastructure & Repository Ingestion (Gabriel)
+
+- **[API.md](API.md)**: every backend route with its request and response shapes
+- **[HANDOFF.md](HANDOFF.md)**: what's built, known limitations, and notes for each teammate
+
+### Run from a clean clone
+Postgres (Supabase) and ChromaDB (Chroma Cloud) are hosted, so there's nothing to install locally besides Node and git.
+```bash
+npm install
+cp .env.example .env    # paste the shared DATABASE_URL, CHROMA_*, GITHUB_WEBHOOK_SECRET, TOKEN_ENCRYPTION_KEY
+npm run db:migrate      # create/update tables (idempotent)
+npm start               # http://localhost:3000  (PowerShell: $env:PORT=3001; npm start  if 3000 is taken)
+```
+Check it at `GET /api/health`, which should show `"status":"ok"`. For a pipeline smoke test without the server, run `npm run test:ingest`.
+
+Offline alternative for ChromaDB: `pip install chromadb`, run `npm run chroma` in a second terminal, and leave `CHROMA_API_KEY` empty.
+
+### Main routes
+| Method | Route | Purpose |
+|---|---|---|
+| `POST` | `/api/repos` | Connect a GitHub repo `{ url, token? }` and start indexing |
+| `GET` | `/api/repos`, `/api/repos/:id` | List repos / get one repo |
+| `GET` | `/api/repos/:id/status` | Poll indexing progress |
+| `POST` | `/api/repos/:id/reindex` | Re-index (incremental; `{ full: true }` rebuilds) |
+| `POST` | `/api/webhooks/github` | Push-triggered re-index (called by GitHub) |
+| `POST`/`GET` | `/api/sessions`, `/api/sessions/:id` | Persistent chat sessions and their logged queries |
+| `POST`/`GET` | `/api/repos/:id/doc-proposals` | Store / list documentation proposals |
+| `POST` | `/api/doc-proposals/:id/approve` \| `reject` | Review a proposal |

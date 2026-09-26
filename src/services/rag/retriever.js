@@ -1,6 +1,9 @@
 const axios = require('axios');
 const config = require('../../config/watsonx');
 const { generateEmbedding } = require('../watsonx/embedding');
+const { queryChunks } = require('../../db/chroma');
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Built-in fallback code chunks used when ChromaDB is not yet seeded or operational.
@@ -226,6 +229,22 @@ async function getIamToken() {
  * @returns {Promise<Array<object>>} - List of relevant code chunk objects.
  */
 async function retrieveCodeChunks({ query, queryEmbedding, repoId, topK = 5 }) {
+  // [Gabriel] Primary path: indexed repository chunks via the shared Chroma client
+  // (local or Chroma Cloud, per .env). repoId = repositoryId from /api/repos; a non-UUID
+  // repoId (e.g. "TRACiE") searches all indexed repos. Code chunks only by default; git
+  // history lives in the same collection — see queryChunks({ chunkTypes: ['commit', 'pull_request'] }).
+  try {
+    const hits = await queryChunks({
+      embedding: queryEmbedding,
+      repositoryId: UUID_RE.test(repoId || '') ? repoId : undefined,
+      chunkTypes: ['code'],
+      topK
+    });
+    if (hits.length > 0) return hits;
+  } catch (error) {
+    console.warn('[retriever] Chroma query failed, using fallback:', error.message);
+  }
+
   try {
     // Attempt ChromaDB query via REST API
     const response = await axios.post(
