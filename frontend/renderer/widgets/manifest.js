@@ -12,6 +12,7 @@
     { name: 'quiz', css: true },
     { name: 'code-exercise', css: true },
     { name: 'flashcards', css: true },
+    { name: 'audio', css: true },
   ];
 
   const me = document.currentScript;

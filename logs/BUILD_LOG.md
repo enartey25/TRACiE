@@ -51,3 +51,31 @@ Progress panel matches the three-section design: title/subtitle, Learned/Needs-r
 
 **Not matched / notes:**
 - None. All specified states and interactions implemented.
+
+---
+
+## audio
+
+**Date:** 2026-09-26
+**Files changed:**
+- `frontend/renderer/widgets/audio.js` — created
+- `frontend/renderer/widgets/audio.css` — created
+- `frontend/renderer/widgets/manifest.js` — added one line`{ name: 'audio', css: true }`
+
+**States implemented:**
+- loading (skeleton shimmer, seek/skip disabled, duration shows '--:--')
+- playing (--playing class, Pause button)
+- paused (Play button restored)
+- ended (--ended class, Replay button)
+- error (ctx.notice rendered above transcript)
+
+**Payload fields used:** `src`, `title`, `description`, `transcript` (optional), `downloadable` (optional)
+
+**Design matched:** right half of `docs/renderer/design/flashcards-audio.png` (Audio overview widget)
+
+**Notes:**
+- NaN/Infinity duration guard: seek+skip remain disabled until isFinite(audio.duration)
+- Cross-widget pause: all [data-uir-audio] elements paused on play
+- Download link uses target=_blank rel=noopener per clarification 4
+- Transcript collapsed (<details> no open) by default per clarification 2
+- prefers-reduced-motion disables shimmer animation and transitions
