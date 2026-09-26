@@ -1,0 +1,49 @@
+# docker-compose.yml — local development services for TRACiE
+#
+# Starts a local ChromaDB server and (optionally) a local PostgreSQL instance.
+# This is NOT required when using Supabase and Chroma Cloud (the defaults).
+#
+# Usage:
+#   docker compose up -d           # start ChromaDB + Postgres
+#   docker compose up -d chromadb  # start ChromaDB only
+#   docker compose down            # stop and remove containers
+#
+# After starting, set in .env:
+#   CHROMADB_URL=http://localhost:8000   # leave CHROMA_API_KEY empty
+#   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/tracie
+
+version: '3.8'
+
+services:
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: tracie-chromadb
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: tracie-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tracie
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
