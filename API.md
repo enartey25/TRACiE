@@ -4,6 +4,25 @@ Base URL: `http://localhost:3000` (or whatever `PORT` is). Request and response 
 Errors: `{ "error": "message" }` with a 4xx/5xx status, unless a section says otherwise.
 IDs (`repositoryId`, `jobId`, `sessionId`, `queryId`, `proposal_id`) are UUIDs. A malformed ID gets a `400`, and an unknown one gets a `404`.
 
+## Prerequisites & Environment Setup
+
+The backend relies on several external services. Ensure the following environment variables are set in your `.env` file (see `.env.example` for reference):
+
+| Variable | Description | Required |
+|---|---|---|
+| `PORT` | HTTP port for the Express server | Yes |
+| `WATSONX_APIKEY` | IBM Cloud API key for LLM and embeddings | Yes |
+| `WATSONX_PROJECT_ID` | watsonx.ai project ID | Yes |
+| `WATSONX_URL` | Regional endpoint for watsonx.ai | Yes |
+| `WATSONX_EMBEDDING_MODEL_ID` | Embedding model identifier | Yes |
+| `DATABASE_URL` | Postgres connection string (Supabase) | Yes |
+| `CHROMA_API_KEY` | ChromaDB Cloud API key (if using cloud mode) | Conditional |
+| `GITHUB_TOKEN` | Default GitHub token for private repos/higher rate limits | Optional |
+| `GITHUB_WEBHOOK_SECRET` | HMAC secret for GitHub webhooks | Required for Webhooks |
+| `TOKEN_ENCRYPTION_KEY` | 64 hex chars for encrypting repo tokens at rest | Yes |
+
+**Accounts:** every `/api` route needs 
+
 **Accounts:** every `/api` route needs a GitHub sign-in (`GET /auth/github`), except `/api/health`, `/api/auth/status`, `/api/fixtures` and `/api/webhooks/*`. Signed-out calls get `401 { "error": "unauthenticated" }`. Each user sees only the repositories they connected and the chats they started. Another user's repository, session, query or proposal ID returns `404`, as if it didn't exist. Repositories are indexed once per URL and shared behind the scenes, so connecting a repository someone else already indexed is instant.
 
 **Owners:** Gabriel owns everything in this file. Ethan owns `/api/query`, `/api/stream`, `/api/fixtures`, `/api/auth/status`, `/api/docs/*` and `/api/sessions/:id/history`, listed at the end.
