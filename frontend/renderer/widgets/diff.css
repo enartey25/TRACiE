@@ -1,0 +1,68 @@
+/* diff widget styles */
+
+/* local token — no red tint exists in the system palette */
+.uir-diff { --uir-diff-del: #FDECEA; }
+
+/* outer shell: reuse uir-codepanel visual (bg, border, radius, overflow) */
+.uir-diff.uir-codepanel {
+  overflow: hidden;
+}
+
+/* file name: bold mono */
+.uir-diff__filename {
+  font-family: var(--uir-mono);
+  font-weight: 700;
+}
+
+/* scrollable diff area */
+.uir-diff__body {
+  overflow-x: auto;
+  font-family: var(--uir-mono);
+  font-size: .82rem;
+  line-height: 1.65;
+}
+
+/* ── rows ── */
+.uir-diff__row {
+  display: flex;
+  align-items: stretch;
+}
+
+.uir-diff__row--add  { background: var(--uir-sage-tint); }
+.uir-diff__row--del  { background: var(--uir-diff-del); }
+.uir-diff__row--hunk { background: var(--uir-sand); }
+.uir-diff__row--ctx  { background: transparent; }
+
+/* ── prefix column ── */
+.uir-diff__prefix {
+  width: 28px;
+  flex-shrink: 0;
+  text-align: center;
+  padding: 0 4px;
+  font: .8rem var(--uir-mono);
+  opacity: .7;
+  user-select: none;
+  color: var(--uir-muted);
+}
+
+.uir-diff__prefix--add { color: var(--uir-ok); }
+.uir-diff__prefix--del { color: var(--uir-err); }
+
+/* hunk row: full-row italic muted text */
+.uir-diff__row--hunk .uir-diff__prefix,
+.uir-diff__row--hunk .uir-diff__line {
+  color: var(--uir-muted);
+  font-style: italic;
+}
+
+/* ── content column ── */
+.uir-diff__line {
+  flex: 1;
+  padding: 1px 8px;
+  white-space: pre;
+  overflow-x: auto;
+  font: .8rem/1.65 var(--uir-mono);
+  color: var(--uir-text);
+}
+
+.uir-diff__row--hunk .uir-diff__line { color: var(--uir-muted); }

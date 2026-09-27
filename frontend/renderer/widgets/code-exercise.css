@@ -1,0 +1,81 @@
+/* ============================================================
+   code-exercise.css  –  UIRenderer code_exercise (bare) widget
+   BEM: .uir-ce__<part>
+   All option states, hover, reveal are inherited from .uir-quiz__*
+   (quiz.css is loaded before this file — code_exercise reuses quiz's
+   card shell and all quiz__* classes via questionFlow).
+   This file adds the repository box (renderPreface) and panel-wrap
+   (renderContext) styles only.
+   ============================================================ */
+
+/* ---------- repository box ---------- */
+.uir-ce__repo-box {
+  background: #fff;
+  border: 1px solid var(--uir-line);
+  border-radius: var(--uir-radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-family: var(--uir-sans);
+}
+
+/* row 1: dot + label + scope */
+.uir-ce__repo-row1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.uir-ce__repo-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--uir-slate);
+  flex-shrink: 0;
+}
+
+.uir-ce__repo-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--uir-text);
+}
+
+.uir-ce__repo-scope {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--uir-teal);
+  font-weight: 500;
+}
+
+/* row 2: breadcrumb */
+.uir-ce__breadcrumb {
+  font-size: 0.80rem;
+  font-family: var(--uir-mono);
+  color: var(--uir-muted);
+  line-height: 1.4;
+  flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.uir-ce__crumb-seg {
+  color: var(--uir-muted);
+}
+
+.uir-ce__crumb-sep {
+  color: var(--uir-soft-text);
+  margin: 0 1px;
+  user-select: none;
+}
+
+.uir-ce__crumb-last {
+  font-weight: 700;
+  color: var(--uir-text);
+}
+
+/* ---------- panel wrap ---------- */
+.uir-ce__panel-wrap {
+  margin-top: 0;
+}

@@ -54,7 +54,8 @@ async function cloneRepository({ url, token, jobId }) {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([k]) => !/^(EDITOR|VISUAL|PAGER|GIT_.*)$/i.test(k))
   );
-  const git = simpleGit({ timeout: { block: 120000 }, allowEnvironment: ['GIT_TERMINAL_PROMPT'] }).env({ ...env, GIT_TERMINAL_PROMPT: '0' });
+  const git = simpleGit({ timeout: { block: 120000 }, allowEnvironment: ['GIT_TERMINAL_PROMPT'] })
+    .env({ ...env, GIT_TERMINAL_PROMPT: '0' });
   try {
     await git.clone(remote, dir, ['--depth', '1', '--single-branch', '--no-tags']);
   } catch (error) {
@@ -80,14 +81,18 @@ async function cloneRepository({ url, token, jobId }) {
 /**
  * Map of repo-relative path -> git blob SHA for every tracked file at HEAD.
  * Used for incremental re-indexing (unchanged SHA => skip re-embedding).
+ *
+ * `git ls-tree -r -z` outputs NUL-terminated records of the form:
+ *   "<mode> <type> <sha>\t<path>\0"
  */
 async function listBlobShas(dir) {
   const out = await simpleGit(dir).raw(['ls-tree', '-r', '-z', 'HEAD']);
   const shas = new Map();
-  for (const entry of out.split('\\0')) {
-    // "<mode> blob <sha>	<path>"
-    const tab = entry.indexOf('	');
+  // Split on NUL; the last element is always an empty string after the final NUL.
+  for (const entry of out.split('\0')) {
+    const tab = entry.indexOf('\t');
     if (tab < 0) continue;
+    // prefix = "<mode> <type> <sha>"; path follows the tab
     const [, type, sha] = entry.slice(0, tab).split(' ');
     if (type === 'blob') shas.set(entry.slice(tab + 1), sha);
   }

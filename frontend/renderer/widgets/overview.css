@@ -1,0 +1,106 @@
+/* overview.css — styles for the overview widget */
+
+/* Lead paragraph */
+.uir-overview__lead {
+  color: var(--uir-teal);
+  font-family: var(--uir-sans);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 0 0 0.75rem;
+}
+
+/* Body paragraph */
+.uir-overview__body {
+  font-family: var(--uir-sans);
+  font-size: 0.9375rem;
+  color: var(--uir-text);
+  max-width: 70ch;
+  line-height: 1.65;
+  margin: 0 0 1.5rem;
+}
+
+/* Layer grid — 3 columns, collapses to 1 below 600px */
+.uir-overview__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 599px) {
+  .uir-overview__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Layer card */
+.uir-overview__layer {
+  background: var(--uir-sand);
+  border-radius: var(--uir-radius-sm);
+  padding: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Highlighted layer card */
+.uir-overview__layer--highlight {
+  background: var(--uir-sage-tint);
+  border: 1px solid var(--uir-line-strong);
+}
+
+/* Top row: icon + tag */
+.uir-overview__layer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Icon wrapper — small white square */
+.uir-overview__layer-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  background: #ffffff;
+  border-radius: var(--uir-radius-sm);
+  flex-shrink: 0;
+  color: var(--uir-teal);
+}
+
+.uir-overview__layer-icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* Tag label */
+.uir-overview__layer-tag {
+  font-family: var(--uir-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uir-teal);
+  text-align: right;
+}
+
+/* Layer title */
+.uir-overview__layer-title {
+  font-family: var(--uir-sans);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--uir-text);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Layer body text */
+.uir-overview__layer-text {
+  font-family: var(--uir-sans);
+  font-size: 0.8125rem;
+  color: var(--uir-muted);
+  margin: 0;
+  line-height: 1.55;
+}

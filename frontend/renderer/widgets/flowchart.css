@@ -1,0 +1,153 @@
+/* flowchart widget — structured node/edge row
+ * BEM: .uir-flowchart__*   CSS vars: --uir-* only
+ */
+
+/* Container query context so the widget can respond to its own width,
+   not the viewport. Every parent card is already a block container. */
+.uir-flowchart {
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* column-gap: 0 — connectors carry their own side-padding */
+  column-gap: 0;
+  row-gap: 14px;
+  padding: 4px 0;
+  font-family: var(--uir-sans);
+}
+
+/* ── Step wrapper (connector + node, unbreakable) ── */
+/* Each step after the first is wrapped so a row never ends on a dangling arrow. */
+.uir-flowchart__step {
+  display: inline-flex;
+  align-items: center;
+  /* Prevent the browser from breaking inside this unit */
+  white-space: nowrap;
+}
+
+/* ── Node ── */
+.uir-flowchart__node {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  border-radius: var(--uir-radius-sm);
+  border: 1px solid var(--uir-line-strong);
+  background: var(--uir-sage-tint);
+  min-width: 88px;
+  text-align: center;
+  line-height: 1.3;
+  /* Allow label text to wrap inside the box itself */
+  white-space: normal;
+}
+
+.uir-flowchart__node--emphasis {
+  background: var(--uir-teal);
+  border-color: var(--uir-teal);
+  color: #fff;
+}
+
+.uir-flowchart__node--sand {
+  background: var(--uir-sand);
+}
+
+.uir-flowchart__node-label {
+  font-weight: 600;
+  font-size: 0.8125rem;          /* ~13px */
+  color: inherit;
+  white-space: nowrap;
+}
+
+.uir-flowchart__node--emphasis .uir-flowchart__node-label {
+  color: #fff;
+}
+
+.uir-flowchart__node-sub {
+  font-size: 0.6875rem;           /* ~11px */
+  color: var(--uir-soft-text);
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
+.uir-flowchart__node--emphasis .uir-flowchart__node-sub {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* ── Connector (edge label + arrow) ──
+ * DOM order: arrow first, label second.
+ * column-reverse renders label on top, arrow below (horizontal layout).
+ * In vertical @container rule, flex-direction:row gives "↓ label" order.
+ */
+.uir-flowchart__connector {
+  display: inline-flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.uir-flowchart__edge-label {
+  font-size: 0.625rem;            /* ~10px */
+  color: var(--uir-soft-text);
+  white-space: nowrap;
+  line-height: 1.2;
+  /* No text-transform — show exactly as payload */
+  letter-spacing: 0.03em;
+}
+
+.uir-flowchart__arrow {
+  font-size: 0.875rem;
+  color: var(--uir-soft-text);
+  line-height: 1;
+}
+
+/* ── Vertical stack below 560 px (container query) ── */
+@container (max-width: 560px) {
+  .uir-flowchart {
+    flex-direction: column;
+    align-items: stretch;
+    row-gap: 0;
+  }
+
+  /* First node fills full width */
+  .uir-flowchart > .uir-flowchart__node {
+    width: 100%;
+    display: flex;
+  }
+
+  /* Each step stacks vertically: connector centred above node */
+  .uir-flowchart__step {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    white-space: normal;
+  }
+
+  /* Connector becomes a centred "↓ label" line.
+   * DOM order is arrow then label; flex-direction:row gives "↓ label". */
+  .uir-flowchart__connector {
+    flex-direction: row;
+    padding: 4px 0;
+    gap: 4px;
+  }
+
+  /* Swap the horizontal → for a ↓ in vertical mode */
+  .uir-flowchart__arrow {
+    font-size: 0;   /* hide the → character */
+    line-height: 0;
+  }
+  .uir-flowchart__arrow::before {
+    content: '↓';
+    font-size: 0.875rem;
+    line-height: 1;
+    color: var(--uir-soft-text);
+  }
+
+  .uir-flowchart__step .uir-flowchart__node {
+    width: 100%;
+    display: flex;
+  }
+}

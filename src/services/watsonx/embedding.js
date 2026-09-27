@@ -1,5 +1,6 @@
 const axios = require('axios');
 const config = require('../../config/watsonx');
+const backendConfig = require('../../config/backend');
 const { getAuthHeaders, hasValidCredentials } = require('./auth');
 
 /**
@@ -95,7 +96,7 @@ async function generateEmbeddings(texts, options = {}) {
     return texts.map(t => generateMockEmbedding(t));
   }
 
-  const batchSize = options.batchSize || 16;
+  const batchSize = options.batchSize || backendConfig.ingestion.embedBatchSize || 16;
   const modelId = options.modelId || config.embeddingModelId;
   const projectId = options.projectId || config.projectId;
   const headers = await getAuthHeaders();

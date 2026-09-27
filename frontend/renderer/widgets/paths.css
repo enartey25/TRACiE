@@ -1,0 +1,62 @@
+/* ── paths.css — directory_tree & file_reference widgets ──────────────────── */
+
+/* Breadcrumb container */
+.uir-paths__breadcrumb {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  font-family: var(--uir-mono);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Individual path segment */
+.uir-paths__seg {
+  color: var(--uir-text);
+}
+
+/* Last segment — bold */
+.uir-paths__seg--last {
+  font-weight: 700;
+  color: var(--uir-text);
+}
+
+/* Separator " / " */
+.uir-paths__sep {
+  color: var(--uir-muted);
+  margin: 0 2px;
+}
+
+/* ── directory_tree body ──────────────────────────────────────────────────── */
+
+.uir-paths__tree-body {
+  background: var(--uir-sand);
+  border-radius: var(--uir-radius-sm);
+  padding: 12px 16px;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* ── file_reference — lines pill ─────────────────────────────────────────── */
+
+.uir-paths__lines-pill {
+  display: inline-block;
+  background: var(--uir-sand);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-family: var(--uir-mono);
+  font-size: 0.8rem;
+  color: var(--uir-teal);
+  margin: 10px 0;
+  border: 1px solid var(--uir-line);
+}
+
+/* ── file_reference — reason paragraph ───────────────────────────────────── */
+
+.uir-paths__reason {
+  color: var(--uir-text);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  margin: 8px 0 0;
+}

@@ -1,0 +1,121 @@
+/* ── ER Diagram widget ───────────────────────────────────────────────── */
+
+.uir-er-diagram__wrap {
+  background: var(--uir-sand);
+  border-radius: var(--uir-radius-sm);
+  padding: 16px;
+  font-family: var(--uir-sans);
+}
+
+/* Entity card grid */
+.uir-er-diagram__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+/* Single entity card */
+.uir-er-diagram__entity {
+  flex: 1 1 180px;
+  min-width: 160px;
+  border: 1px solid var(--uir-line-strong);
+  border-radius: var(--uir-radius-sm);
+  overflow: hidden;
+  background: var(--uir-surface, #fff);
+}
+
+/* Entity header — teal background, white bold name */
+.uir-er-diagram__entity-header {
+  background: var(--uir-teal);
+  padding: 8px 12px;
+}
+
+.uir-er-diagram__entity-name {
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.88rem;
+  font-family: var(--uir-mono);
+  letter-spacing: 0.02em;
+}
+
+/* Fields list */
+.uir-er-diagram__fields {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.uir-er-diagram__field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* Icon slot — fixed width keeps names aligned */
+.uir-er-diagram__field-icon {
+  display: flex;
+  align-items: center;
+  width: 16px;
+  flex-shrink: 0;
+  color: var(--uir-teal);
+}
+
+.uir-er-diagram__field-icon svg,
+.uir-er-diagram__field-icon i[data-lucide] {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+}
+
+/* Field name */
+.uir-er-diagram__field-name {
+  font-family: var(--uir-mono);
+  color: var(--uir-text);
+  font-size: 0.83rem;
+}
+
+.uir-er-diagram__field-name--pk {
+  font-weight: 700;
+}
+
+/* Note badge (UNIQUE, etc.) */
+.uir-er-diagram__field-note {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-family: var(--uir-sans);
+  color: var(--uir-soft-text);
+  letter-spacing: 0.03em;
+}
+
+/* Relations row */
+.uir-er-diagram__relations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* Individual relation chip */
+.uir-er-diagram__rel-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.76rem;
+  font-family: var(--uir-sans);
+  color: var(--uir-soft-text);
+  background: var(--uir-surface, #fff);
+  border: 1px solid var(--uir-line-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+  letter-spacing: 0.02em;
+}
+
+/* Reduced-motion guard (no transitions defined, but covers future additions) */
+@media (prefers-reduced-motion: reduce) {
+  .uir-er-diagram__entity,
+  .uir-er-diagram__rel-chip {
+    transition: none;
+  }
+}
