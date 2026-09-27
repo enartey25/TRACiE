@@ -75,8 +75,12 @@ const navSearch      = document.getElementById('navSearch');
 const navGallery     = document.getElementById('navGallery');
 const repoInput      = document.getElementById('repoInput');
 const connectBtn     = document.getElementById('connectBtn');
-const connectedRepos = document.getElementById('connectedRepos');
-const connectedList  = document.getElementById('connectedList');
+const repoPicker         = document.getElementById('repoPicker');
+const repoPickerTrigger  = document.getElementById('repoPickerTrigger');
+const repoPickerValue    = document.getElementById('repoPickerValue');
+const repoPickerBadge    = document.getElementById('repoPickerBadge');
+const repoPickerProgress = document.getElementById('repoPickerProgress');
+const repoPickerMenu     = document.getElementById('repoPickerMenu');
 const modeChat       = document.getElementById('modeChat');
 const modePending    = document.getElementById('modePending');
 const heroView       = document.getElementById('heroView');
@@ -255,6 +259,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     if (settingsOverlay && settingsOverlay.style.display !== 'none') closeSettings();
     else if (searchOverlay.style.display !== 'none') closeSearchOverlay();
+    else if (!repoPickerMenu.hidden) setRepoMenuOpen(false);
     else if (shell.classList.contains('sidebar-open')) setSidebarOpen(false);
   }
 });
@@ -429,16 +434,7 @@ function startIndexingPoller(repoId) {
         repo.stage = stage;
       }
 
-      // Update the DOM card directly (avoid full re-render flicker)
-      const wrap = document.getElementById('repo-wrap-' + repoId);
-      if (wrap) {
-        const badge = wrap.querySelector('.repo-status-badge');
-        const bar   = wrap.querySelector('.repo-progress-bar');
-        const card  = wrap.querySelector('.connected-repo');
-        if (badge) { badge.className = 'repo-status-badge ' + status; badge.textContent = statusLabel(status, stage); }
-        if (bar)   bar.style.width = Math.round(progress * 100) + '%';
-        wrap.classList.toggle('is-indexing', status === 'indexing' || status === 'pending');
-      }
+      updateRepoStatusInPicker(repoId);
 
       if (status === 'ready' || status === 'failed') {
         clearInterval(_indexingPollers[repoId]);
@@ -448,7 +444,7 @@ function startIndexingPoller(repoId) {
         if (status === 'ready') {
           showToast((repo ? repo.name : 'Repository') + ' finished indexing and is ready to query.', 'success');
         } else {
-          showToast((repo ? repo.name : 'Repository') + ' failed to index' + (d.error ? ': ' + d.error : '.') + ' Use the \u21BB button to retry.', 'error');
+          showToast((repo ? repo.name : 'Repository') + ' failed to index' + (d.error ? ': ' + d.error : '.') + ' Re-index it from the repository menu to retry.', 'error');
         }
         if (settingsOverlay && settingsOverlay.style.display !== 'none') renderSettingsRepos();
       }
@@ -463,75 +459,135 @@ function statusLabel(status, stage) {
   return '';
 }
 
-function renderConnected() {
-  connectedList.innerHTML = '';
-  if (state.connected.length === 0) {
-    const msg = document.createElement('p');
-    msg.className = 'no-repos-msg';
-    msg.id = 'noReposMsg';
-    msg.textContent = 'No repositories connected.';
-    connectedList.appendChild(msg);
-    return;
+/** "owner/repo" -> "repo" and "owner"; the sidebar is too narrow for the full name. */
+function repoShortName(name) {
+  return String(name || '').split('/').pop();
+}
+function repoOwner(name) {
+  const parts = String(name || '').split('/');
+  return parts.length > 1 ? parts[0] : '';
+}
+
+function isIndexingStatus(status) {
+  return status === 'indexing' || status === 'pending';
+}
+
+function setRepoMenuOpen(open) {
+  if (open && !state.connected.length) return;
+  repoPicker.classList.toggle('is-open', open);
+  repoPickerTrigger.setAttribute('aria-expanded', String(open));
+  repoPickerMenu.hidden = !open;
+}
+
+function selectRepo(id) {
+  state.activeRepoId = id;
+  localStorage.setItem('tracie_active_repo', id);
+  setRepoMenuOpen(false);
+  renderConnected();
+  repoPickerTrigger.focus();
+  const repo = state.connected.find(r => r.id === id);
+  if (repo) showToast('Now asking about ' + repo.name + '.', 'info');
+}
+
+/** Status badge + progress for one repository, updated in place while indexing. */
+function updateRepoStatusInPicker(id) {
+  const repo = state.connected.find(r => r.id === id);
+  if (!repo) return;
+  const label = statusLabel(repo.status, repo.stage || '');
+  const option = repoPickerMenu.querySelector('[data-repo-id="' + id + '"] .repo-status-badge');
+  if (option) {
+    option.className = 'repo-status-badge ' + repo.status;
+    option.textContent = label;
+    option.hidden = !label;
   }
-  state.connected.forEach(function(item) {
-    const url = item.url;
-    const id = item.id;
-    const label = item.name || url.replace('https://github.com/', '');
-    const isSelected = (state.activeRepoId === id) || (state.connected.length === 1 && !state.activeRepoId);
-    if (isSelected && !state.activeRepoId) state.activeRepoId = id;
+  if (id === state.activeRepoId) {
+    repoPickerBadge.className = 'repo-status-badge ' + repo.status;
+    repoPickerBadge.textContent = label;
+    repoPickerBadge.hidden = !label;
+    const indexing = isIndexingStatus(repo.status);
+    repoPicker.classList.toggle('is-indexing', indexing);
+    repoPickerProgress.querySelector('.repo-progress-bar').style.width =
+      (indexing ? Math.max(Math.round((repo.progress || 0) * 100), 6) : 0) + '%';
+  }
+}
 
-    const repoStatus = item.status || 'ready';
-    const isActive = repoStatus === 'indexing' || repoStatus === 'pending';
-    const progressPct = Math.round((item.progress || 0) * 100);
-    const stageTxt = statusLabel(repoStatus, item.stage || '');
+/** Renders the repository dropdown: the trigger shows the active repo, the menu lists them all. */
+function renderConnected() {
+  if (state.connected.length && !state.connected.some(r => r.id === state.activeRepoId)) {
+    state.activeRepoId = state.connected[0].id;
+  }
+  const active = state.connected.find(r => r.id === state.activeRepoId);
 
-    // Wrapper (card + progress bar together)
-    const wrap = document.createElement('div');
-    wrap.className = 'repo-card-wrap' + (isActive ? ' is-indexing' : '');
-    wrap.id = 'repo-wrap-' + id;
+  repoPickerTrigger.disabled = !active;
+  repoPickerValue.textContent = active ? repoShortName(active.name) : 'No repositories connected';
+  repoPickerTrigger.title = active ? active.name : '';
+  if (!active) {
+    setRepoMenuOpen(false);
+    repoPickerBadge.hidden = true;
+    repoPicker.classList.remove('is-indexing');
+  }
 
-    const div = document.createElement('div');
-    div.className = 'connected-repo' + (isSelected ? ' selected active' : '');
-    div.title = 'Active repository for developer queries (click to switch)';
-    div.innerHTML =
-      '<span class="repo-name" title="' + url + '">' + escapeHtml(label) + '</span>' +
-      (stageTxt ? '<span class="repo-status-badge ' + repoStatus + '">' + escapeHtml(stageTxt) + '</span>' : '') +
-      '<button class="repo-reindex-btn" aria-label="Re-index ' + escapeHtml(label) + '" title="Re-index repository" data-id="' + id + '">&#x21BB;</button>' +
-      '<button aria-label="Disconnect ' + escapeHtml(label) + '" data-url="' + url + '">&#x2715;</button>';
+  repoPickerMenu.innerHTML = '';
+  state.connected.forEach(function(repo) {
+    const selected = repo.id === state.activeRepoId;
+    const row = document.createElement('div');
+    row.className = 'repo-option' + (selected ? ' is-selected' : '');
+    row.setAttribute('data-repo-id', repo.id);
+    row.innerHTML =
+      '<button class="repo-option-select" role="option" aria-selected="' + selected + '" title="' + escapeHtml(repo.url) + '">' +
+        '<span class="repo-option-check" aria-hidden="true">' + (selected ? '&#x2713;' : '') + '</span>' +
+        '<span class="repo-option-name">' + escapeHtml(repoShortName(repo.name)) +
+          (repoOwner(repo.name) ? '<small>' + escapeHtml(repoOwner(repo.name)) + '</small>' : '') + '</span>' +
+        '<span class="repo-status-badge" hidden></span>' +
+      '</button>' +
+      '<button class="repo-option-action" data-action="reindex" aria-label="Re-index ' + escapeHtml(repo.name) + '" title="Re-index">&#x21BB;</button>' +
+      '<button class="repo-option-action is-danger" data-action="remove" aria-label="Remove ' + escapeHtml(repo.name) + '" title="Remove from my account">&#x2715;</button>';
+    row.querySelector('.repo-option-select').addEventListener('click', () => selectRepo(repo.id));
+    row.querySelector('[data-action="reindex"]').addEventListener('click', e => reindexRepo(repo.id, e.currentTarget));
+    row.querySelector('[data-action="remove"]').addEventListener('click', () => disconnectRepo(repo.id));
+    repoPickerMenu.appendChild(row);
+  });
 
-    // Progress bar
-    const progressWrap = document.createElement('div');
-    progressWrap.className = 'repo-progress-wrap';
-    const progressBar = document.createElement('div');
-    progressBar.className = 'repo-progress-bar';
-    progressBar.style.width = (isActive ? Math.max(progressPct, 6) : 0) + '%';
-    progressWrap.appendChild(progressBar);
-
-    div.addEventListener('click', function(e) {
-      if (e.target.tagName && e.target.tagName.toLowerCase() === 'button') return;
-      state.activeRepoId = id;
-      localStorage.setItem('tracie_active_repo', id);
-      renderConnected();
-    });
-
-    div.querySelector('.repo-reindex-btn').addEventListener('click', function(e) {
-      e.stopPropagation();
-      reindexRepo(id, e.currentTarget);
-    });
-
-    div.querySelector('button[data-url]').addEventListener('click', function(e) {
-      e.stopPropagation();
-      disconnectRepo(id);
-    });
-
-    wrap.appendChild(div);
-    wrap.appendChild(progressWrap);
-    connectedList.appendChild(wrap);
-
-    // Auto-start poller for repos still indexing
-    if (isActive) startIndexingPoller(id);
+  state.connected.forEach(function(repo) {
+    updateRepoStatusInPicker(repo.id);
+    // Keep polling repos that are still indexing
+    if (isIndexingStatus(repo.status)) startIndexingPoller(repo.id);
   });
 }
+
+repoPickerTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setRepoMenuOpen(repoPickerMenu.hidden);
+});
+
+repoPickerTrigger.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    setRepoMenuOpen(true);
+    const items = repoPickerMenu.querySelectorAll('.repo-option-select');
+    const current = repoPickerMenu.querySelector('.repo-option.is-selected .repo-option-select');
+    (current || items[0]).focus();
+  }
+});
+
+repoPickerMenu.addEventListener('click', e => e.stopPropagation());
+repoPickerMenu.addEventListener('keydown', (e) => {
+  const items = Array.from(repoPickerMenu.querySelectorAll('.repo-option-select'));
+  const i = items.indexOf(document.activeElement);
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && i >= 0) {
+    e.preventDefault();
+    items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+  } else if (e.key === 'Escape') {
+    e.stopPropagation();
+    setRepoMenuOpen(false);
+    repoPickerTrigger.focus();
+  }
+});
+
+// Clicking anywhere else closes the menu.
+document.addEventListener('click', () => {
+  if (!repoPickerMenu.hidden) setRepoMenuOpen(false);
+});
 
 /**
  * Full re-index (every file re-chunked and re-embedded). Without full:true an incremental

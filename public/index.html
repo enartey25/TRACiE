@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=3.0">
+  <link rel="stylesheet" href="index.css?v=3.1">
   <link rel="stylesheet" href="renderer/ui-renderer.css">
   <!-- Playfair Display for UIRenderer serif titles -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500&display=swap" rel="stylesheet">
@@ -49,9 +49,16 @@
       </div>
       <button class="dark-button" id="connectBtn">Connect Codebase</button>
       <div class="connected-repositories" id="connectedRepos">
-        <span class="connected-label">Connected Repositories</span>
-        <div id="connectedList">
-          <p class="no-repos-msg" id="noReposMsg">No repositories connected.</p>
+        <span class="connected-label" id="repoPickerLabel">Active Repository</span>
+        <!-- Repository dropdown: rendered by renderConnected() in app.js -->
+        <div class="repo-picker" id="repoPicker">
+          <button class="repo-picker-trigger" id="repoPickerTrigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="repoPickerMenu" disabled>
+            <span class="repo-picker-value" id="repoPickerValue">No repositories connected</span>
+            <span class="repo-status-badge" id="repoPickerBadge" hidden></span>
+            <span class="repo-picker-chevron" aria-hidden="true">&#x25BE;</span>
+          </button>
+          <div class="repo-progress-wrap" id="repoPickerProgress"><div class="repo-progress-bar"></div></div>
+          <div class="repo-picker-menu" id="repoPickerMenu" role="listbox" aria-labelledby="repoPickerLabel" hidden></div>
         </div>
       </div>
     </section>
@@ -393,6 +400,6 @@
 <!-- UIRenderer engine + widgets -->
 <script src="renderer/ui-renderer.js"></script>
 <script src="renderer/widgets/manifest.js"></script>
-<script src="app.js?v=3.5"></script>
+<script src="app.js?v=3.6"></script>
 </body>
 </html>
