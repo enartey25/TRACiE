@@ -1,6 +1,10 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
 const config = require('./config/watsonx');
+const backendConfig = require('./config/backend');
 const { verifyAuth } = require('./services/watsonx/auth');
 const queryRouter = require('./routes/query');
 const streamRouter = require('./routes/stream');
@@ -12,20 +16,49 @@ const reposRouter = require('./routes/repos');
 const webhooksRouter = require('./routes/webhooks');
 const sessionsRouter = require('./routes/sessions');
 const docProposalsRouter = require('./routes/docProposals');
+const authRouter = require('./routes/auth');
 const postgres = require('./db/postgres');
 const chroma = require('./db/chroma');
 const repoStore = require('./services/repos/repoStore');
+const { getGlobalCacheStats, clearAllCaches } = require('./services/rag/ragCache');
 
 const path = require('path');
 
 const app = express();
 
+// ── Session Middleware ────────────────────────────────────────────────────────
+// Sessions are stored in the existing Postgres database.
+// connect-pg-simple creates the "session" table automatically on first use.
+app.use(session({
+  store: new PgSession({
+    conString: backendConfig.databaseUrl,
+    // Reuse an existing pool if available – avoids a second connection for sessions.
+    ssl: backendConfig.databaseSsl ? { rejectUnauthorized: false } : false,
+    tableName: 'tracie_sessions',
+    createTableIfMissing: true
+  }),
+  name: 'tracie.sid',
+  secret: process.env.SESSION_SECRET || backendConfig.tokenEncryptionKey || 'tracie-dev-secret-change-in-prod',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',   // HTTPS-only in prod
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000                 // 7 days
+  }
+}));
+
 // Middlewares
-app.use(cors());
+app.use(cors({ credentials: true, origin: process.env.APP_ORIGIN || true }));
 // GitHub webhooks need the raw body for HMAC verification, so mount before express.json().
 app.use('/api/webhooks', webhooksRouter);
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../public'), {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+}));
 
 // Health & System Diagnostic Route
 // Returns 200 with status 'ok' when Postgres + ChromaDB are reachable, 'degraded' otherwise.
@@ -39,11 +72,28 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-// Authentication Status Route
+// Cache Telemetry & Invalidation Routes
+app.get('/api/cache/stats', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    stats: getGlobalCacheStats()
+  });
+});
+
+app.post('/api/cache/clear', (req, res) => {
+  clearAllCaches();
+  res.json({ status: 'ok', message: 'All RAG caches cleared successfully.' });
+});
+
+// WatsonX Authentication Status Route
 app.get('/api/auth/status', async (req, res) => {
   const status = await verifyAuth();
   res.json(status);
 });
+
+// GitHub OAuth Routes (/auth/github, /auth/github/callback, /auth/me, /auth/logout)
+app.use('/', authRouter);
 
 // Fixtures Route (for Romel & Newlove to preview widgets directly)
 app.get('/api/fixtures', (req, res) => {
@@ -74,15 +124,18 @@ app.use('/api', docProposalsRouter);
 // Start server if run directly
 if (require.main === module) {
   const PORT = config.port;
+
+  // Fail orphaned jobs BEFORE accepting requests so getActiveJob() never sees stale pending/running jobs.
   repoStore.failOrphanedJobs()
     .then(n => n && console.log(`[startup] marked ${n} orphaned indexing job(s) as failed`))
-    .catch(e => console.warn(`[startup] Postgres not ready: ${e.message}`));
-
-  app.listen(PORT, () => {
+    .catch(e => console.warn(`[startup] Postgres not ready: ${e.message}`))
+    .finally(() => app.listen(PORT, () => {
     console.log(`===============================================`);
     console.log(`🚀 TRACiE Backend Service running on port ${PORT}`);
     console.log(`   - Health:   http://localhost:${PORT}/api/health`);
     console.log(`   - Auth:     http://localhost:${PORT}/api/auth/status`);
+    console.log(`   - GitHub:   GET  http://localhost:${PORT}/auth/github  (OAuth login)`);
+    console.log(`   - Me:       GET  http://localhost:${PORT}/auth/me      (session user)`);
     console.log(`   - Query:    POST http://localhost:${PORT}/api/query`);
     console.log(`   - Stream:   GET  http://localhost:${PORT}/api/stream`);
     console.log(`   - Fixtures: http://localhost:${PORT}/api/fixtures`);
@@ -90,8 +143,12 @@ if (require.main === module) {
     console.log(`   - Status:   GET  http://localhost:${PORT}/api/repos/:id/status`);
     console.log(`   - Webhook:  POST http://localhost:${PORT}/api/webhooks/github`);
     console.log(`   - API docs: see API.md`);
+    if (!process.env.GITHUB_CLIENT_ID) {
+      console.log(`   ⚠️  GITHUB_CLIENT_ID not set — OAuth login will return 503.`);
+      console.log(`      Set GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET to enable GitHub OAuth.`);
+    }
     console.log(`===============================================`);
-  });
+  }));
 }
 
 module.exports = app;

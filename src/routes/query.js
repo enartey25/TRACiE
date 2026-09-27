@@ -14,7 +14,7 @@ const { executeRAGQuery } = require('../services/rag/pipeline');
  * }
  */
 router.post('/query', async (req, res) => {
-  const { query, repoId, sessionId, conversationHistory } = req.body || {};
+  const { query, repoId, repoName, sessionId, conversationHistory, requestedWidget, widgetType } = req.body || {};
 
   if (!query || typeof query !== 'string' || !query.trim()) {
     return res.status(400).json({
@@ -29,8 +29,10 @@ router.post('/query', async (req, res) => {
     const widget = await executeRAGQuery({
       query: query.trim(),
       repoId,
+      repoName,
       sessionId,
-      conversationHistory
+      conversationHistory,
+      requestedWidget: requestedWidget || widgetType
     });
 
     return res.status(200).json(widget);

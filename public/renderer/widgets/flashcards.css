@@ -1,0 +1,394 @@
+/* ============================================================
+   flashcards.css  –  UIRenderer flashcards (bare) widget
+   BEM: .uir-fc__<part>
+   ============================================================ */
+
+/* ---------- outer layout: card + progress side-by-side ---------- */
+.uir-fc {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  font-family: var(--uir-sans);
+  color: var(--uir-text);
+}
+
+/* ---------- left column: the card ---------- */
+.uir-fc__card-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* ---------- right column: progress panel ---------- */
+.uir-fc__panel {
+  flex: 0 0 220px;
+  background: var(--uir-card);
+  border: 1px solid var(--uir-line);
+  border-radius: var(--uir-radius);
+  padding: 18px;
+  font-family: var(--uir-sans);
+  box-shadow: var(--uir-shadow);
+}
+
+/* stack on narrow viewports */
+@media (max-width: 640px) {
+  .uir-fc {
+    flex-direction: column;
+  }
+  .uir-fc__panel {
+    flex: 1 1 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* ---------- card shell (both faces share this) ---------- */
+.uir-fc__card {
+  background: var(--uir-card);
+  border: 1px solid var(--uir-line);
+  border-radius: var(--uir-radius);
+  padding: 22px;
+  box-shadow: var(--uir-shadow);
+}
+
+/* ---------- header row ---------- */
+.uir-fc__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.uir-fc__counter {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--uir-text);
+}
+
+.uir-fc__chip {
+  background: var(--uir-sage-soft);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--uir-text);
+}
+
+/* ---------- progress bar ---------- */
+.uir-fc__progress-track {
+  height: 4px;
+  background: var(--uir-sage-soft);
+  border-radius: 999px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.uir-fc__progress-fill {
+  height: 100%;
+  background: var(--uir-slate);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uir-fc__progress-fill { transition: none; }
+}
+
+/* ---------- flip container ---------- */
+.uir-fc__flip-wrap {
+  perspective: 1200px;
+  cursor: pointer;
+}
+
+/*
+ * flip-inner: CSS grid so both face cells share one row.
+ * The row height = max(front height, back height) — the card always
+ * fits the taller face and the 22px card padding-bottom is never lost.
+ */
+.uir-fc__flip-inner {
+  display: grid;
+  width: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.45s cubic-bezier(.4,0,.2,1);
+}
+
+/* 3-D flip */
+.uir-fc__flip-wrap.is-flipped .uir-fc__flip-inner {
+  transform: rotateY(180deg);
+}
+
+/* Both faces occupy the same grid cell */
+.uir-fc__face--front,
+.uir-fc__face--back {
+  grid-area: 1 / 1;
+  width: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Back face starts rotated 180° in 3-D */
+.uir-fc__face--back {
+  transform: rotateY(180deg);
+}
+
+/* Reduced-motion: crossfade instead of 3-D rotate */
+@media (prefers-reduced-motion: reduce) {
+  .uir-fc__flip-inner {
+    transition: none;
+  }
+  /* keep grid layout; just crossfade opacity */
+  .uir-fc__face--front {
+    transition: opacity 0.25s ease;
+  }
+  .uir-fc__face--back {
+    /* suppress the 3-D rotation so the face is readable */
+    transform: none !important;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease;
+  }
+  .uir-fc__flip-wrap.is-flipped .uir-fc__face--front {
+    opacity: 0;
+    visibility: hidden;
+  }
+  .uir-fc__flip-wrap.is-flipped .uir-fc__face--back {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* ---------- FRONT face ---------- */
+.uir-fc__term {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 8px;
+  color: var(--uir-text);
+}
+
+.uir-fc__prompt {
+  font-size: 0.88rem;
+  color: var(--uir-soft-text);
+  margin: 0 0 18px;
+}
+
+.uir-fc__flip-hint {
+  background: var(--uir-sage-tint);
+  border: 1px solid var(--uir-line-strong);
+  border-radius: var(--uir-radius-sm);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.uir-fc__flip-hint-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--uir-text);
+  margin: 0 0 4px;
+}
+
+.uir-fc__flip-hint-body {
+  font-size: 0.82rem;
+  color: var(--uir-soft-text);
+  margin: 0;
+}
+
+/* ---------- BACK face ---------- */
+.uir-fc__back-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 12px;
+  color: var(--uir-text);
+}
+
+.uir-fc__detail {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--uir-text);
+  margin: 0 0 16px;
+}
+
+.uir-fc__related {
+  background: var(--uir-sage-soft);
+  border-radius: var(--uir-radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.uir-fc__related-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--uir-text);
+  margin: 0 0 4px;
+}
+
+.uir-fc__related-text {
+  font-size: 0.85rem;
+  color: var(--uir-text);
+  margin: 0;
+}
+
+/* ---------- card footer (back face) ---------- */
+.uir-fc__divider {
+  border: none;
+  border-top: 1px solid var(--uir-line);
+  margin: 0 0 14px;
+}
+
+.uir-fc__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.uir-fc__btn {
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-family: var(--uir-sans);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+  border: 1.5px solid transparent;
+}
+
+.uir-fc__btn--outline {
+  background: transparent;
+  border-color: var(--uir-line-strong);
+  color: var(--uir-text);
+}
+.uir-fc__btn--outline:hover:not(:disabled) {
+  background: var(--uir-sage-tint);
+}
+
+.uir-fc__btn--solid {
+  background: var(--uir-slate);
+  color: #fff;
+  border-color: var(--uir-slate);
+}
+.uir-fc__btn--solid:hover:not(:disabled) {
+  background: #256040;
+  border-color: #256040;
+}
+
+.uir-fc__btn:focus-visible {
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+}
+
+/* ---------- progress panel ---------- */
+.uir-fc__panel-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--uir-text);
+  margin: 0 0 3px;
+}
+
+.uir-fc__panel-sub {
+  font-size: 0.78rem;
+  color: var(--uir-soft-text);
+  margin: 0 0 14px;
+}
+
+.uir-fc__stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--uir-text);
+  margin-bottom: 6px;
+}
+
+.uir-fc__stat-count {
+  font-weight: 700;
+}
+
+.uir-fc__panel-track {
+  height: 4px;
+  background: var(--uir-sage-soft);
+  border-radius: 999px;
+  margin: 8px 0 14px;
+  overflow: hidden;
+}
+
+.uir-fc__panel-fill {
+  height: 100%;
+  background: var(--uir-slate);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uir-fc__panel-fill { transition: none; }
+}
+
+.uir-fc__rhythm-box {
+  background: var(--uir-sage-tint);
+  border-radius: var(--uir-radius-sm);
+  padding: 10px 12px;
+}
+
+.uir-fc__rhythm-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--uir-text);
+  margin: 0 0 4px;
+}
+
+.uir-fc__rhythm-text {
+  font-size: 0.78rem;
+  color: var(--uir-soft-text);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ---------- complete screen ---------- */
+.uir-fc__complete {
+  text-align: center;
+  padding: 32px 16px 16px;
+}
+
+.uir-fc__complete-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--uir-text);
+}
+
+.uir-fc__complete-sub {
+  font-size: 0.88rem;
+  color: var(--uir-soft-text);
+  margin: 0 0 18px;
+}
+
+.uir-fc__complete-stats {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.uir-fc__complete-stat {
+  text-align: center;
+}
+
+.uir-fc__complete-stat-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--uir-text);
+  display: block;
+}
+
+.uir-fc__complete-stat-label {
+  font-size: 0.78rem;
+  color: var(--uir-soft-text);
+}
+
+/* ---------- complete screen button row ---------- */
+.uir-fc__complete-btns {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

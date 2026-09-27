@@ -4,8 +4,21 @@ const { retrieveCodeChunks } = require('./retriever');
 const { buildRAGPrompt } = require('../../prompts/promptTemplates');
 const { parseAndValidateWidgetJSON } = require('./jsonParser');
 const { orchestrateAgents } = require('../agents/supervisor');
-const { recordTurn, getFormattedHistoryForPrompt } = require('../memory/sessionMemory');
+const { recordTurn, getFormattedHistoryForPrompt, getSessionHistory } = require('../memory/sessionMemory');
+const { logTurn } = require('../sessions/sessionStore');
 const { detectExternalReferences, formatExternalReferencesForPrompt } = require('../enrichment/contextEnricher');
+const repoStore = require('../repos/repoStore');
+const {
+  isFollowUpQuery,
+  getCachedResponse,
+  setCachedResponse,
+  getCachedChunks,
+  setCachedChunks,
+  setSessionChunks,
+  getSessionChunks
+} = require('./ragCache');
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Executes the complete RAG Query Pipeline for developer queries.
@@ -23,28 +36,129 @@ const { detectExternalReferences, formatExternalReferencesForPrompt } = require(
  * @param {Function} [params.onThought] - Callback for agent thoughts and streaming events.
  * @returns {Promise<object>} - Validated UI Widget JSON object.
  */
-async function executeRAGQuery({ query, repoId, sessionId, conversationHistory = [], onThought }) {
+async function executeRAGQuery({ query, repoId, repoName, sessionId, conversationHistory = [], requestedWidget, onThought }) {
   if (!query || typeof query !== 'string') {
     throw new Error('Query must be a non-empty string.');
   }
 
+  const startTime = Date.now();
   const provider = (process.env.LLM_PROVIDER || 'groq').toLowerCase();
 
-  // 1. Vectorize the incoming query
-  const queryEmbedding = await generateEmbedding(query);
+  // -- Step -1: Resolve Target Repository ------------------------------------
+  let effectiveRepoId = repoId;
+  let targetRepoName = repoName || 'the repository';
+  const qLower = query.toLowerCase();
 
-  // 2. Retrieve top-k nearest code chunks from ChromaDB
-  const chunks = await retrieveCodeChunks({
-    query,
-    queryEmbedding,
-    repoId,
-    topK: 5
-  });
+  // 1. If explicit UUID repoId was provided, look up repository metadata
+  if (effectiveRepoId && UUID_RE.test(effectiveRepoId) && effectiveRepoId !== 'TRACiE') {
+    try {
+      const repo = await repoStore.getRepository(effectiveRepoId);
+      if (repo) {
+        targetRepoName = repo.name || targetRepoName;
+      }
+    } catch {}
+  } else {
+    // 2. No UUID repoId provided: inspect connected repositories in DB
+    try {
+      const repos = await repoStore.listRepositories();
+      if (repos && repos.length > 0) {
+        // Check if query explicitly matches any connected repository name
+        const matched = repos.find(r => r.name && qLower.includes(r.name.split('/')[1]?.toLowerCase() || r.name.toLowerCase()));
+        if (matched) {
+          effectiveRepoId = matched.id;
+          targetRepoName = matched.name;
+        } else if (!qLower.includes('tracie')) {
+          // If query does not explicitly ask for TRACiE, default to the user's connected repository
+          effectiveRepoId = repos[0].id;
+          targetRepoName = repos[0].name;
+        } else {
+          targetRepoName = 'TRACiE';
+        }
+      } else if (qLower.includes('fastapi')) {
+        targetRepoName = 'FastAPI';
+      } else {
+        targetRepoName = 'TRACiE';
+      }
+    } catch {
+      targetRepoName = 'TRACiE';
+    }
+  }
 
-  const fallbackCitations = chunks.map(c => ({
-    file_path: c.file_path,
-    start_line: c.start_line,
-    end_line: c.end_line,
+  const cacheKey = targetRepoName ? `${effectiveRepoId || 'repo'}::${targetRepoName}` : (effectiveRepoId || 'TRACiE');
+
+  // Multi-turn session context check
+  const sessionHistory = sessionId ? getSessionHistory(sessionId) : [];
+  const hasPriorTurns = sessionHistory.length > 0;
+  const lastTurn = hasPriorTurns ? sessionHistory[sessionHistory.length - 1] : null;
+  const isFollowUp = Boolean(sessionId && (hasPriorTurns || isFollowUpQuery(query)));
+
+  // If follow-up, use context-aware cache key incorporating preceding query so it never collides with generic cross-session queries
+  const effectiveCacheKey = isFollowUp && lastTurn
+    ? `${cacheKey}::followup::${lastTurn.userQuery}`
+    : cacheKey;
+
+  // -- Step 0: Semantic / Fast-Path Response Cache ---------------------------
+  const shouldCheckCache = !isFollowUp || (isFollowUp && Boolean(lastTurn));
+  const cachedWidget = shouldCheckCache ? getCachedResponse(query, effectiveCacheKey, requestedWidget) : null;
+  if (cachedWidget) {
+    if (onThought) {
+      onThought({
+        agent: 'TRACiE-Cache',
+        action: 'cache_hit',
+        thought: `[fast] Instant cache hit: Serving cached widget for "${query.slice(0, 50)}" (${Date.now() - startTime}ms latency).`
+      });
+    }
+    if (sessionId) {
+      recordTurn(sessionId, { query, widget: cachedWidget });
+    }
+    return cachedWidget;
+  }
+
+  // -- Step 1: Follow-Up Detection & Context Warmup --------------------------
+  let chunks = null;
+  let cacheTier = 'cold';
+  const sessionData = sessionId ? getSessionChunks(sessionId) : null;
+
+  if (isFollowUp && sessionData && sessionData.chunks && sessionData.chunks.length > 0) {
+    // Re-use warm codebase chunks from prior turn in this session
+    chunks = sessionData.chunks;
+    cacheTier = 'session_warm_context';
+    if (onThought) {
+      onThought({
+        agent: 'TRACiE-Memory',
+        action: 'context_warmup',
+        thought: `[fast] Context acceleration: Reusing ${chunks.length} warm codebase chunks from preceding session turn.`
+      });
+    }
+  } else {
+    // Retrieval query: If follow-up, combine with last turn query for high-relevance semantic search
+    const retrievalQuery = isFollowUp && lastTurn ? `${lastTurn.userQuery} ${query}` : query;
+    const cachedChunks = getCachedChunks(cacheKey, retrievalQuery);
+    if (cachedChunks && cachedChunks.length > 0) {
+      chunks = cachedChunks;
+      cacheTier = 'chunks_cache';
+    } else {
+      // Vectorize query and retrieve top-k chunks from ChromaDB
+      const queryEmbedding = await generateEmbedding(retrievalQuery);
+      chunks = await retrieveCodeChunks({
+        query: retrievalQuery,
+        queryEmbedding,
+        repoId: effectiveRepoId,
+        topK: 5
+      });
+      setCachedChunks(cacheKey, retrievalQuery, chunks);
+    }
+  }
+
+  // Update warm session chunks for subsequent follow-up queries
+  if (sessionId) {
+    setSessionChunks(sessionId, { chunks, query, widgetType: requestedWidget });
+  }
+
+  const fallbackCitations = (chunks || []).map(c => ({
+    file_path: c.file_path || c.metadata?.url || (c.chunk_type === 'commit' || c.chunk_type === 'pull_request' ? 'git-history' : 'unknown'),
+    start_line: c.start_line || 1,
+    end_line: c.end_line || 1,
     snippet: (c.content || '').substring(0, 150)
   }));
 
@@ -66,12 +180,19 @@ async function executeRAGQuery({ query, repoId, sessionId, conversationHistory =
       chunks,
       conversationHistory: sessionHistoryText,
       externalContext: externalContextText,
+      requestedWidget,
+      repoId: effectiveRepoId,
+      repoName: targetRepoName,
       onThought
     });
   } else {
     // watsonx or local mock fallback
+    const effectiveQuery = requestedWidget
+      ? `${query}\n[CRITICAL OVERRIDE: Format output strictly as a "${requestedWidget}" widget]`
+      : query;
+
     const prompt = buildRAGPrompt({
-      query,
+      query: effectiveQuery,
       chunks,
       conversationHistory,
       externalContext: externalContextText
@@ -96,21 +217,29 @@ async function executeRAGQuery({ query, repoId, sessionId, conversationHistory =
     }
   }
 
-  // 6. Record turn in multi-turn memory
+  // 6. Record turn in multi-turn memory & persist in Postgres session store
   if (sessionId) {
     recordTurn(sessionId, { query, widget });
+    await logTurn({ sessionId, query, chunks, widget });
   }
 
   // Attach session/execution telemetry
+  widget._cached = false;
+  widget._cacheTier = cacheTier;
   widget._meta = {
     ...(widget._meta || {}),
     sessionId: sessionId || null,
-    repoId: repoId || null,
-    chunksRetrieved: chunks.length,
-    externalRefsMatched: externalRefs.length,
+    repoId: effectiveRepoId || null,
+    repoName: targetRepoName,
+    chunksRetrieved: (chunks || []).length,
+    externalRefsMatched: (externalRefs || []).length,
     provider: provider,
+    executionTimeMs: Date.now() - startTime,
     timestamp: new Date().toISOString()
   };
+
+  // Cache response for instant repeat queries
+  setCachedResponse(query, effectiveCacheKey, requestedWidget, widget);
 
   return widget;
 }

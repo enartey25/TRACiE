@@ -3,17 +3,18 @@ const { query } = require('../../db/postgres');
 /** Data access for repositories + indexing_jobs. */
 
 const REPO_COLUMNS = `id, url, name, platform, index_status, last_commit_sha, last_indexed, history_indexed_at,
-  created_at, (encrypted_token IS NOT NULL) AS has_token`;
+  created_at, (encrypted_token IS NOT NULL) AS has_token, user_role, auto_commit, commit_mode, push_branch`;
 
-async function upsertRepository({ url, name, platform = 'github', encryptedToken }) {
+async function upsertRepository({ url, name, platform = 'github', encryptedToken, userRole = 'unknown', autoCommit = false, commitMode = 'pr' }) {
   const { rows } = await query(
-    `INSERT INTO repositories (url, name, platform, encrypted_token)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO repositories (url, name, platform, encrypted_token, user_role, auto_commit, commit_mode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (url) DO UPDATE
        SET name = EXCLUDED.name,
-           encrypted_token = COALESCE(EXCLUDED.encrypted_token, repositories.encrypted_token)
+           encrypted_token = COALESCE(EXCLUDED.encrypted_token, repositories.encrypted_token),
+           user_role = CASE WHEN EXCLUDED.user_role <> 'unknown' THEN EXCLUDED.user_role ELSE repositories.user_role END
      RETURNING ${REPO_COLUMNS}, (xmax = 0) AS created`,
-    [url, name, platform, encryptedToken || null]
+    [url, name, platform, encryptedToken || null, userRole, autoCommit, commitMode]
   );
   return rows[0];
 }
@@ -34,12 +35,31 @@ async function getRepositoryToken(id) {
   return rows[0] ? rows[0].encrypted_token : null;
 }
 
+async function updateRepositorySettings(id, { userRole, autoCommit, commitMode, pushBranch }) {
+  const fields = [];
+  const params = [id];
+  let i = 2;
+  if (userRole !== undefined) { fields.push(`user_role = $${i++}`); params.push(userRole); }
+  if (autoCommit !== undefined) { fields.push(`auto_commit = $${i++}`); params.push(autoCommit); }
+  if (commitMode !== undefined) { fields.push(`commit_mode = $${i++}`); params.push(commitMode); }
+  if (pushBranch !== undefined) { fields.push(`push_branch = $${i++}`); params.push(pushBranch); }
+
+  if (fields.length === 0) return await getRepository(id);
+
+  const { rows } = await query(
+    `UPDATE repositories SET ${fields.join(', ')} WHERE id = $1 RETURNING ${REPO_COLUMNS}`,
+    params
+  );
+  return rows[0] || null;
+}
+
 /** All repositories with their latest indexing job (for the repo picker / dashboard). */
 async function listRepositories() {
   const { rows } = await query(
     `SELECT r.id, r.url, r.name, r.platform, r.index_status, r.last_commit_sha, r.last_indexed,
             r.history_indexed_at, r.created_at,
             (r.encrypted_token IS NOT NULL) AS has_token,
+            r.user_role, r.auto_commit, r.commit_mode, r.push_branch,
             j.id AS job_id, j.status AS job_status, j.stage, j.chunks_done, j.chunks_total
      FROM repositories r
      LEFT JOIN LATERAL (
@@ -167,6 +187,7 @@ async function deleteIndexedFiles(repositoryId, filePaths) {
 
 module.exports = {
   upsertRepository, getRepository, findRepositoryByUrl, getRepositoryToken, listRepositories, setRepositoryStatus,
+  updateRepositorySettings,
   setHistoryIndexed, setPendingReindex, takePendingReindex,
   createJob, updateJob, getLatestJob, getActiveJob, failOrphanedJobs,
   getIndexedFiles, upsertIndexedFiles, deleteIndexedFiles

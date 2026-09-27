@@ -1,5 +1,9 @@
 const { SYSTEM_PROMPT } = require('./systemPrompt');
-const { getCompleteRepositoryTree, formatTreeAsText } = require('../services/navigator/repositoryScanner');
+const {
+  getCompleteRepositoryTree,
+  getCanonicalFastApiTree,
+  formatTreeAsText
+} = require('../services/navigator/repositoryScanner');
 
 /**
  * Formats retrieved code chunks into a structured context block for the LLM.
@@ -65,18 +69,41 @@ REMINDER: Return ONLY a valid JSON object matching the contract specification. N
 // Specialized Subagent Prompts
 // ---------------------------------------------------------------------------
 
-function buildArchitectPrompt({ query, chunks, conversationHistory = '' }) {
+function resolveTargetRepoName({ query = '', repoName = '', chunks = [] }) {
+  const qLower = (query || '').toLowerCase();
+  if (repoName && repoName !== 'TRACiE' && repoName !== 'the repository') return repoName;
+  if (qLower.includes('pandas')) return 'pandas-dev/pandas';
+  if (qLower.includes('fastapi')) return 'fastapi/fastapi';
+  if (chunks && chunks.length > 0) {
+    const firstPath = chunks[0].file_path || '';
+    if (firstPath.startsWith('pandas/') || firstPath.includes('pandas')) return 'pandas-dev/pandas';
+    if (firstPath.startsWith('fastapi/') || firstPath.includes('fastapi')) return 'fastapi/fastapi';
+  }
+  return repoName || 'the repository';
+}
+
+function buildArchitectPrompt({ query, chunks = [], repoName, repositoryTree, conversationHistory = '' }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
-  const tree = getCompleteRepositoryTree();
-  const manifest = formatTreeAsText(tree);
+  const isFastApi = targetName.toLowerCase().includes('fastapi');
+  const isTracie = targetName === 'TRACiE' && query.toLowerCase().includes('tracie');
+  const tree = repositoryTree || (isFastApi ? getCanonicalFastApiTree() : (isTracie ? getCompleteRepositoryTree() : null));
+  const manifest = tree
+    ? formatTreeAsText(tree)
+    : (chunks.length > 0 ? Array.from(new Set(chunks.map(c => c.file_path))).map(p => `- ${p}`).join('\n') : `Files for ${targetName}`);
 
   return `You are the Architect Subagent in the TRACiE multi-agent system.
-Your mission is to generate comprehensive, publication-grade Mermaid.js diagrams visualizing the TRACiE codebase.
+Your mission is to generate comprehensive, publication-grade Mermaid.js diagrams visualizing the ${targetName} codebase.
 
-CODEBASE MODULE MANIFEST:
+CRITICAL REPOSITORY SCOPE RULES:
+- ALL components, nodes, subgraphs, files, classes, endpoints, and data flows MUST be 100% about ${targetName}.
+- Do NOT output components, files, or architecture for TRACiE itself unless ${targetName} is explicitly TRACiE.
+- Ground your diagram in the provided ${targetName} code chunks and module manifest.
+
+CODEBASE MODULE MANIFEST (${targetName}):
 ${manifest}
 
-RETRIEVED CODE CHUNKS:
+RETRIEVED CODE CHUNKS (${targetName}):
 ${context}
 ${conversationHistory ? `\nPRIOR TURNS:\n${conversationHistory}\n` : ''}
 
@@ -84,44 +111,48 @@ USER QUERY:
 ${query}
 
 DIAGRAM SELECTION RULES:
-1. SEQUENCE DIAGRAM: If the user asks for a sequence diagram, interaction flow, or step-by-step execution timeline:
-   - Use "sequenceDiagram" syntax with "autonumber" and actors/participants (e.g. Developer, UI, Server, Supervisor, ChromaDB, Groq, ElevenLabs).
+1. SEQUENCE DIAGRAM: If the user asks for a sequence diagram, interaction flow, or step-by-step execution timeline for ${targetName}:
+   - Use "sequenceDiagram" syntax with "autonumber" and actors/participants representing components in ${targetName}.
    - Use activations (activate/deactivate), solid/dashed arrows (->>, -->>), and note boxes.
 
-2. ER / SCHEMA DIAGRAM (SUPABASE STYLE): If the user asks for an ER diagram, database schema, entity relationships, or data model:
+2. ER / SCHEMA DIAGRAM: If the user asks for an ER diagram, database schema, entity relationships, or data model for ${targetName}:
    - Use "erDiagram" syntax.
-   - Define entities with fields, types, and primary/foreign keys (e.g. USERS, SESSIONS, QUERIES, CODE_CHUNKS, DOC_PROPOSALS).
+   - Define entities with fields, types, and primary/foreign keys from ${targetName}.
    - Show cardinality links (||--o{, }|--||, ||--||) and relation labels.
 
-3. UML / CLASS DIAGRAM: If the user asks for UML, class hierarchy, interfaces, or object models:
+3. UML / CLASS DIAGRAM: If the user asks for UML, class hierarchy, interfaces, or object models in ${targetName}:
    - Use "classDiagram" syntax.
    - Define classes with public (+) and private (-) properties and methods with signatures.
    - Show inheritance (<|--), composition (*--), and association (-->).
 
-4. CONNECTED SYSTEM TOPOLOGY (SUPABASE-STYLE MODULE MAP): If the user asks for repository layout, component connections, or system architecture:
-   - Use "flowchart TD" or "flowchart LR" with subgraphs grouping subsystems (e.g., Presentation, API Routes, BeeAI Supervisor, RAG Core, External Services).
-   - Show labeled connection paths showing exact protocols, HTTP methods, and data contracts (e.g. -->|HTTP POST /api/query|, -->|SSE EventStream|).
+4. CONNECTED SYSTEM TOPOLOGY: If the user asks for repository layout, component connections, or system architecture for ${targetName}:
+   - Use "flowchart TD" or "flowchart LR" with subgraphs grouping subsystems in ${targetName}.
+   - Show labeled connection paths showing exact protocols, function calls, and data flows.
 
 MERMAID SYNTAX STRICT RULES:
 - Always use valid, clean Mermaid DSL without markdown code blocks inside the JSON string (escape newlines as \\n).
 - Always quote node labels containing spaces, parentheses, or brackets: Node["Label (Extra Info)"].
 - Keep node IDs alphanumeric without spaces.
 
-OUTPUT JSON FORMAT:
+OUTPUT JSON FORMAT (STRICT — field names are EXACT, do NOT use "diagram", "mermaid_code", "dsl", or any other alias):
 {
   "type": "architecture_diagram",
-  "title": "Descriptive Diagram Title",
-  "diagram_source": "Mermaid DSL string",
-  "caption": "Clear architectural explanation of the diagram components and data flow"
-}`;
+  "title": "${targetName} Architecture Diagram",
+  "diagram_source": "Mermaid DSL string — THIS FIELD MUST BE NAMED diagram_source, not diagram",
+  "caption": "Clear architectural explanation of the ${targetName} diagram components and data flow"
 }
 
-function buildCodeExplainerPrompt({ query, chunks, conversationHistory = '' }) {
+CRITICAL: The Mermaid DSL MUST go in the "diagram_source" field. Never use "diagram", "mermaid_code", "code", "dsl", or any other key name.`;
+}
+
+function buildCodeExplainerPrompt({ query, chunks = [], repoName, conversationHistory = '' }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path} (Lines ${c.start_line}-${c.end_line})]\n${c.content}`).join('\n\n');
   return `You are the Code Explainer Subagent in the TRACiE multi-agent system.
-Inspect the code chunks and present the specific implementation answering the query.
+Inspect the code chunks from ${targetName} and present the specific implementation answering the query.
+All explanations, file paths, and citations must be strictly about ${targetName}.
 ${conversationHistory ? `\nPRIOR TURNS:\n${conversationHistory}\n` : ''}
-CODE CHUNKS:
+CODE CHUNKS (${targetName}):
 ${context}
 
 USER QUERY:
@@ -131,46 +162,55 @@ REQUIREMENTS:
 Return a JSON object:
 {
   "type": "code_snippet",
-  "file_path": "Path to primary source file",
-  "language": "javascript",
+  "file_path": "Path to primary source file in ${targetName}",
+  "language": "python or javascript or appropriate",
   "start_line": 1,
   "end_line": 35,
-  "code": "Exact or cleaned code snippet",
-  "explanation": "Clear explanation of how the code works"
+  "code": "Exact or cleaned code snippet from ${targetName}",
+  "explanation": "Clear explanation of how the ${targetName} code works"
 }`;
 }
 
-function buildNavigatorPrompt({ query }) {
-  const tree = getCompleteRepositoryTree();
-  const manifest = formatTreeAsText(tree);
+function buildNavigatorPrompt({ query, repoName, repositoryTree, chunks = [] }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
+  const isFastApi = targetName.toLowerCase().includes('fastapi');
+  const isTracie = targetName === 'TRACiE' && (query || '').toLowerCase().includes('tracie');
+
+  const tree = repositoryTree || (isFastApi ? getCanonicalFastApiTree() : (isTracie ? getCompleteRepositoryTree() : null));
+  const manifest = tree
+    ? formatTreeAsText(tree)
+    : (chunks.length > 0 ? Array.from(new Set(chunks.map(c => c.file_path))).map(p => `- ${p}`).join('\n') : `Files for ${targetName}`);
 
   return `You are the Navigator Subagent in the TRACiE multi-agent system.
-Your goal is to present the complete, comprehensive hierarchical file tree of the TRACiE codebase.
+Your goal is to present the complete, accurate hierarchical file tree and directory structure of the ${targetName} codebase.
 
-ENTIRE REPOSITORY FILE STRUCTURE & DESCRIPTIONS:
+ENTIRE ${targetName.toUpperCase()} REPOSITORY FILE STRUCTURE & DESCRIPTIONS:
 ${manifest}
 
 USER QUERY:
 ${query}
 
 CRITICAL REQUIREMENT:
-Return a JSON object with the FULL repository tree (including public, src, config, contracts, prompts, routes, scripts, services, agents, rag, watsonx, etc.).
-Do NOT truncate or omit directories or files. Every single folder and file from the manifest must be included in the children array.
+Return a JSON object with the file tree corresponding strictly to ${targetName}.
+Do NOT output files or directories belonging to any other project.
+Every single folder and file must represent the actual directory structure of ${targetName}.
 
 Format:
 {
   "type": "file_tree",
-  "title": "Complete TRACiE Repository Layout",
-  "root": ${JSON.stringify(tree, null, 2)}
+  "title": "${targetName} Repository Layout",
+  "root": ${JSON.stringify(tree || { name: targetName, type: 'directory', children: [] }, null, 2)}
 }`;
 }
 
-function buildQuizPrompt({ query, chunks }) {
+function buildQuizPrompt({ query, chunks = [], repoName, conversationHistory = '' }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
   return `You are the Curriculum Subagent in the TRACiE multi-agent system.
-Generate an onboarding quiz testing developer comprehension of the actual codebase logic.
-
-CODE CHUNKS:
+Generate an onboarding quiz testing developer comprehension of the actual ${targetName} codebase logic.
+All questions, options, and explanations must strictly test understanding of ${targetName}. Under no circumstances should questions be about TRACiE unless ${targetName} is TRACiE.
+${conversationHistory ? `\nPRIOR CONVERSATION HISTORY:\n${conversationHistory}\n` : ''}
+CODE CHUNKS (${targetName}):
 ${context}
 
 USER QUERY:
@@ -180,7 +220,7 @@ REQUIREMENTS:
 Return a JSON object:
 {
   "type": "quiz",
-  "question": "Clear question testing developer understanding of this codebase",
+  "question": "Clear question testing developer understanding of ${targetName}",
   "options": [
     "Option A",
     "Option B",
@@ -188,17 +228,20 @@ Return a JSON object:
     "Option D"
   ],
   "correct_index": 0,
-  "explanation": "Why this answer is correct based on the codebase implementation",
-  "code_context": "Relevant file path"
-}`;
+  "explanation": "Why this answer is correct based on the ${targetName} codebase implementation",
+  "code_context": "Relevant file path in ${targetName}"
+}
+IMPORTANT: The property must be named "correct_index" (NOT "correct_option" or "answer") and MUST be a 0-based integer from 0 to 3 corresponding to the correct option index in the "options" array.`;
 }
 
-function buildFlashcardDeckPrompt({ query, chunks }) {
+function buildFlashcardDeckPrompt({ query, chunks = [], repoName, conversationHistory = '' }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
   return `You are the Curriculum Subagent in the TRACiE multi-agent system.
-Generate a deck of interactive flashcards (3 to 5 cards) covering key concepts in this codebase.
-
-CODE CHUNKS:
+Generate a deck of interactive flashcards (3 to 5 cards) covering key concepts in the ${targetName} codebase.
+All flashcards must strictly cover ${targetName}.
+${conversationHistory ? `\nPRIOR CONVERSATION HISTORY:\n${conversationHistory}\n` : ''}
+CODE CHUNKS (${targetName}):
 ${context}
 
 USER QUERY:
@@ -208,26 +251,27 @@ REQUIREMENTS:
 Return a JSON object:
 {
   "type": "flashcard_deck",
-  "title": "Clear Deck Title",
-  "description": "Brief description of topics covered",
+  "title": "${targetName} Core Concepts Flashcards",
+  "description": "Key concepts and mechanisms in ${targetName}",
   "cards": [
     {
       "id": "card-1",
-      "front": "Concept or Question",
-      "back": "Detailed answer explaining the code mechanism",
-      "tag": "Architecture or Middleware or Routing",
-      "citation": "source/file.js"
+      "front": "Concept or Question about ${targetName}",
+      "back": "Detailed answer explaining the ${targetName} code mechanism",
+      "tag": "Architecture or Core or Module",
+      "citation": "source/file"
     }
   ]
 }`;
 }
 
-function buildTutorialStepsPrompt({ query, chunks }) {
+function buildTutorialStepsPrompt({ query, chunks = [], repoName, conversationHistory = '' }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
   return `You are the Curriculum Subagent in the TRACiE multi-agent system.
-Generate a step-by-step developer tutorial for performing a task in this codebase.
-
-CODE CHUNKS:
+Generate a step-by-step developer tutorial for performing a task in the ${targetName} codebase.
+${conversationHistory ? `\nPRIOR CONVERSATION HISTORY:\n${conversationHistory}\n` : ''}
+CODE CHUNKS (${targetName}):
 ${context}
 
 USER QUERY:
@@ -237,27 +281,29 @@ REQUIREMENTS:
 Return a JSON object:
 {
   "type": "tutorial_steps",
-  "title": "Tutorial Title (e.g. How to Add a New Route)",
-  "description": "Overview of what developer will accomplish",
+  "title": "${targetName} Developer Tutorial",
+  "description": "Overview of what developer will accomplish in ${targetName}",
   "prerequisites": ["List of requirements"],
   "steps": [
     {
       "step_number": 1,
       "title": "Step Title",
-      "instructions": "Clear instruction",
-      "code": "Optional code to write or edit",
-      "file_path": "Target file path"
+      "instructions": "Clear instruction for ${targetName}",
+      "code": "Optional code snippet",
+      "file_path": "Target file path in ${targetName}"
     }
   ]
 }`;
 }
 
-function buildLearningPathPrompt({ query, chunks }) {
+function buildLearningPathPrompt({ query, chunks = [], repoName }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
   return `You are the Curriculum Subagent in the TRACiE multi-agent system.
-Generate a comprehensive, ordered developer onboarding curriculum.
+Generate a comprehensive, ordered developer onboarding curriculum for the ${targetName} codebase.
+All modules and milestones must be strictly about ${targetName}.
 
-CODE CHUNKS:
+CODE CHUNKS (${targetName}):
 ${context}
 
 USER QUERY:
@@ -267,15 +313,15 @@ REQUIREMENTS:
 Return a JSON object:
 {
   "type": "learning_path",
-  "title": "Developer Onboarding Curriculum",
-  "description": "Curriculum overview",
-  "target_role": "Backend Engineer / Contributor",
+  "title": "${targetName} Developer Onboarding Curriculum",
+  "description": "Curriculum overview for contributing to ${targetName}",
+  "target_role": "Engineer / Contributor",
   "estimated_hours": 4.5,
   "modules": [
     {
       "module_id": "mod-1",
       "title": "Module Title",
-      "description": "Module summary",
+      "description": "Module summary in ${targetName}",
       "topics": ["Topic 1", "Topic 2"],
       "milestones": ["Milestone 1 to accomplish"]
     }
@@ -283,12 +329,13 @@ Return a JSON object:
 }`;
 }
 
-function buildDocProposalPrompt({ query, chunks, diffInput = '' }) {
+function buildDocProposalPrompt({ query, chunks = [], repoName, diffInput = '', conversationHistory = '' }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
   return `You are the DocWriter Subagent in the TRACiE multi-agent system.
-Analyze code modifications and generate a structured documentation update proposal with a unified diff.
-
-CODEBASE CONTEXT:
+Analyze code modifications and generate a structured documentation update proposal with a unified diff for the ${targetName} codebase.
+${conversationHistory ? `\nPRIOR CONVERSATION HISTORY:\n${conversationHistory}\n` : ''}
+CODEBASE CONTEXT (${targetName}):
 ${context}
 
 CHANGED CODE OR DIFF:
@@ -301,25 +348,30 @@ Return a JSON object:
   "proposal_id": "prop-${Date.now()}",
   "target_file": "README.md",
   "diff_markdown": "--- a/README.md\\n+++ b/README.md\\n@@ -10,3 +10,6 @@\\n Existing content\\n+New documentation content added",
-  "rationale": "Why this documentation update is needed based on the code changes",
-  "pr_title": "docs: update README with new functionality",
-  "pr_body": "Detailed pull request description explaining doc updates",
-  "affected_components": ["List of components"]
+  "rationale": "Why this documentation update is needed in ${targetName}",
+  "pr_title": "docs: update README for ${targetName}",
+  "pr_body": "Detailed pull request description explaining doc updates in ${targetName}",
+  "affected_components": ["List of components in ${targetName}"]
 }`;
 }
 
-function buildAudioBriefingPrompt({ query, chunks }) {
+function buildAudioBriefingPrompt({ query, chunks = [], repoName, conversationHistory = '' }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
   return `You are the Audio Subagent in the TRACiE multi-agent system.
-Your mission is to generate a natural, conversational spoken audio briefing script that DIRECTLY ANSWERS the USER QUERY.
+Your mission is to generate a natural, engaging, and conversational spoken audio briefing script that DIRECTLY ANSWERS the USER QUERY for the ${targetName} codebase.
 
 CRITICAL INSTRUCTIONS:
-- Directly focus on the topic requested in USER QUERY (e.g. if the user asked about the database, explain TRACiE's dual database architecture: ChromaDB for 768-dim vector embeddings and PostgreSQL for relational sessions, queries, and doc proposals).
-- Do NOT provide a generic server overview unless the user specifically asked for a general overview.
-- The transcript must sound conversational, natural, and engaging—like a senior tech lead or podcast host explaining the subsystem directly to a teammate.
+- Directly focus on ${targetName} and the topic requested in USER QUERY.
+- NEVER talk about TRACiE's own architecture or codebase unless ${targetName} is TRACiE.
+- The title must reflect the actual topic in ${targetName} (e.g. "Audio Briefing: ${targetName} Architecture & Core Flows").
+- The transcript must sound conversational, natural, and engaging--like a senior tech lead explaining the subsystem directly to a teammate.
 - Avoid reading out raw punctuation, code brackets, or raw SQL syntax verbatim; explain the concepts smoothly.
+- Provide a clear subtitle and description summarizing the spoken audio content.
 
-CODEBASE CONTEXT:
+${conversationHistory ? `PRIOR CONVERSATION HISTORY:\n${conversationHistory}\n` : ''}
+
+CODEBASE CONTEXT (${targetName}):
 ${context}
 
 USER QUERY:
@@ -329,20 +381,29 @@ REQUIREMENTS:
 Return a JSON object:
 {
   "type": "audio_player",
-  "title": "Audio Briefing: [Specific Topic from User Query]",
-  "transcript": "Natural spoken explanation directly answering the user's specific query...",
+  "title": "Audio Briefing: ${targetName} Walkthrough",
+  "subtitle": "Spoken overview and technical walkthrough of ${targetName}",
+  "description": "Short 1-2 sentence description of what is covered in this ${targetName} briefing",
+  "transcript": "Natural spoken explanation directly answering the user's specific query about ${targetName}...",
   "audio_url": "",
   "duration_seconds": 25.0
 }`;
 }
 
-function buildGeneralQAPrompt({ query, chunks, conversationHistory = '', externalContext = '' }) {
+function buildGeneralQAPrompt({ query, chunks = [], repoName, conversationHistory = '', externalContext = '' }) {
+  const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path} (Lines ${c.start_line}-${c.end_line})]\n${c.content}`).join('\n\n');
   return `You are the General QA Subagent in the TRACiE multi-agent system.
-Answer the developer question strictly based on the provided code chunks.
+Your mission is to answer the developer question strictly based on the target repository: ${targetName} and the provided code chunks.
+
+CRITICAL REPOSITORY SCOPE RULES:
+1. Every answer, explanation, file reference, and code citation MUST be about ${targetName}.
+2. Under NO circumstances should you discuss, refer to, or introduce TRACiE's internal architecture, team, or Node.js services. You are an AI assistant analyzing the codebase of ${targetName}.
+3. If the user asks general questions like "What is this repo?" or "How does the directory look?", answer exclusively about ${targetName}.
+
 ${conversationHistory ? `\nPRIOR CONVERSATION HISTORY:\n${conversationHistory}\n` : ''}
 ${externalContext ? `\n${externalContext}\n` : ''}
-CODE CHUNKS:
+CODE CHUNKS (${targetName}):
 ${context}
 
 USER QUERY:
@@ -352,13 +413,13 @@ REQUIREMENTS:
 Return a JSON object:
 {
   "type": "chat_response",
-  "content": "Comprehensive markdown explanation",
+  "content": "Comprehensive markdown explanation regarding ${targetName}",
   "citations": [
     {
-      "file_path": "File path",
+      "file_path": "File path in ${targetName}",
       "start_line": 1,
       "end_line": 20,
-      "snippet": "Relevant code snippet"
+      "snippet": "Relevant code snippet from ${targetName}"
     }
   ],
   "external_references": [

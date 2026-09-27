@@ -7,7 +7,7 @@ const { synthesizeBriefing } = require('../services/audio/ttsService');
  * Accepts text explanation and returns an audio_player widget.
  */
 router.post('/audio/synthesize', async (req, res) => {
-  const { title, text } = req.body || {};
+  const { title, text, voiceId } = req.body || {};
 
   if (!text || typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({
@@ -21,7 +21,8 @@ router.post('/audio/synthesize', async (req, res) => {
   try {
     const widget = await synthesizeBriefing({
       title: title || 'Codebase Audio Briefing',
-      text: text.trim()
+      text: text.trim(),
+      voiceId: voiceId || undefined
     });
     res.status(200).json(widget);
   } catch (error) {

@@ -1,0 +1,122 @@
+/* database_schema widget styles
+ * BEM: .uir-db-schema__*
+ * CSS variables only — no hard-coded hex colours.
+ */
+
+/* ── grid layout ──────────────────────────────────────────────────────────── */
+.uir-db-schema__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+/* ── individual table card ───────────────────────────────────────────────── */
+.uir-db-schema__table {
+  border: 1px solid var(--uir-line-strong);
+  border-radius: var(--uir-radius-sm);
+  overflow: hidden;
+  font-family: var(--uir-sans);
+}
+
+/* table header */
+.uir-db-schema__table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--uir-teal);
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.uir-db-schema__table-name {
+  font-size: .88rem;
+  font-weight: 600;
+  color: #fff;
+  font-family: var(--uir-sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uir-db-schema__table-count {
+  font-size: .72rem;
+  color: rgba(255, 255, 255, .75);
+  font-family: var(--uir-sans);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── column rows ─────────────────────────────────────────────────────────── */
+.uir-db-schema__table-body {
+  /* divide rows visually without adding extra DOM */
+}
+
+.uir-db-schema__col {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 12px;
+  border-top: 1px solid var(--uir-line-strong);
+}
+
+/* PK row: warm highlight */
+.uir-db-schema__col--pk {
+  background: var(--uir-warm-chip);
+}
+
+/* FK row: sage tint */
+.uir-db-schema__col--fk {
+  background: var(--uir-sage-tint);
+}
+
+.uir-db-schema__col-name {
+  font-size: .82rem;
+  font-weight: 500;
+  color: var(--uir-text);
+  font-family: var(--uir-mono);
+  white-space: nowrap;
+}
+
+.uir-db-schema__col-meta {
+  font-size: .75rem;
+  color: var(--uir-soft-text);
+  font-family: var(--uir-mono);
+  text-align: right;
+  word-break: break-word;
+}
+
+/* ── indexes section ─────────────────────────────────────────────────────── */
+.uir-db-schema__indexes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.uir-db-schema__chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: .75rem;
+  font-family: var(--uir-mono);
+  color: var(--uir-soft-text);
+  background: var(--uir-sand, #f0f0eb);
+  border: 1px solid var(--uir-line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* highlighted index chip */
+.uir-db-schema__chip--highlight {
+  background: var(--uir-sage-tint);
+  border: 1px solid var(--uir-line-strong);
+  color: var(--uir-text);
+}
+
+/* ── reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .uir-db-schema__table {
+    transition: none;
+  }
+}
