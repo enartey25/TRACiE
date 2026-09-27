@@ -1,0 +1,714 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TRACiE Design Guide &amp; Component Specification</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    /* ── Core Palette ── */
+    --color-canvas:        #F5F4F0;   /* warm off-white page bg */
+    --color-surface:       #FFFFFF;
+    --color-surface-alt:   #F0EFE9;   /* warm-neutral fill */
+    --color-surface-sage:  #E8EDE6;   /* muted sage panel bg */
+    --color-sage-light:    #D4DDCE;   /* subtle border / divider green */
+    --color-sage-mid:      #8FAF85;   /* secondary accent sage */
+    --color-sage-strong:   #5C8A50;   /* primary interactive green */
+    --color-sage-dark:     #3A5E30;   /* deep green for hover/active */
+
+    --color-charcoal:      #2B2D2F;   /* primary text */
+    --color-charcoal-mid:  #444749;   /* secondary text */
+    --color-muted:         #7A7D7E;   /* placeholder / caption */
+    --color-border:        #DDD9D1;   /* general borders */
+    --color-border-strong: #B8B4AA;   /* emphasis borders */
+
+    --color-accent-amber:  #C9803A;   /* warm amber for warnings / highlights */
+    --color-accent-rust:   #A6442A;   /* destructive / error */
+    --color-accent-sky:    #4A7FA5;   /* info / link */
+
+    --color-sidebar-bg:    #2B2D2F;   /* dark charcoal sidebar */
+    --color-sidebar-text:  #E8EDE6;
+    --color-sidebar-muted: #8A8D8E;
+    --color-sidebar-hover: #3A3D3F;
+    --color-sidebar-active:#3E5E34;   /* active sage on dark */
+
+    /* ── Typography ── */
+    --font-sans: -apple-system, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+
+    /* ── Spacing ── */
+    --space-1: 4px; --space-2: 8px; --space-3: 12px;
+    --space-4: 16px; --space-5: 20px; --space-6: 24px;
+    --space-8: 32px; --space-10: 40px; --space-12: 48px;
+
+    /* ── Radius ── */
+    --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px;
+
+    /* ── Shadow ── */
+    --shadow-sm:  0 1px 3px rgba(0,0,0,.08);
+    --shadow-md:  0 3px 10px rgba(0,0,0,.10);
+    --shadow-lg:  0 8px 24px rgba(0,0,0,.12);
+  }
+
+  body {
+    background: var(--color-canvas);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--color-charcoal);
+  }
+
+  .page { max-width: 760px; margin: 0 auto; padding: var(--space-12) var(--space-6); }
+
+  /* ── Section headers ── */
+  h1 { font-size: 26px; font-weight: 700; color: var(--color-charcoal); margin-bottom: var(--space-2); letter-spacing: -0.4px; }
+  h2 { font-size: 18px; font-weight: 700; color: var(--color-charcoal); margin-top: var(--space-10); margin-bottom: var(--space-4); padding-bottom: var(--space-2); border-bottom: 2px solid var(--color-sage-light); }
+  h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--color-muted); margin-top: var(--space-6); margin-bottom: var(--space-3); }
+  p  { color: var(--color-charcoal-mid); margin-bottom: var(--space-4); line-height: 1.7; }
+
+  .subtitle { font-size: 15px; color: var(--color-muted); margin-bottom: var(--space-8); border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-6); }
+
+  /* ── Token pill ── */
+  code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1px 5px;
+    color: var(--color-sage-dark);
+  }
+
+  /* ── Color Swatches ── */
+  .swatch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-bottom: var(--space-6); }
+  .swatch {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .swatch-color { height: 52px; }
+  .swatch-info { padding: var(--space-2) var(--space-3); }
+  .swatch-name { font-size: 11px; font-weight: 700; color: var(--color-charcoal); }
+  .swatch-hex  { font-family: var(--font-mono); font-size: 11px; color: var(--color-muted); }
+  .swatch-role { font-size: 10px; color: var(--color-muted); margin-top: 2px; }
+
+  /* ── Type Scale ── */
+  .type-row { display: flex; align-items: baseline; gap: var(--space-5); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+  .type-label { width: 110px; flex-shrink: 0; font-size: 11px; color: var(--color-muted); font-family: var(--font-mono); }
+  .type-spec   { flex: 1; }
+  .type-meta   { font-size: 11px; color: var(--color-muted); text-align: right; width: 140px; flex-shrink: 0; }
+
+  /* ── Spacing Table ── */
+  table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-6); font-size: 13px; }
+  th { text-align: left; padding: var(--space-2) var(--space-3); background: var(--color-surface-alt); color: var(--color-charcoal); font-weight: 700; border: 1px solid var(--color-border); }
+  td { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); color: var(--color-charcoal-mid); }
+  tr:nth-child(even) td { background: var(--color-surface-alt); }
+
+  .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--color-sage-mid); vertical-align: middle; margin-right: var(--space-2); }
+
+  /* ── Layout Diagram ── */
+  .layout-diagram {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    height: 320px;
+    margin-bottom: var(--space-6);
+    background: var(--color-surface);
+  }
+  .ld-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--color-sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+  .ld-logo { height: 28px; background: var(--color-sidebar-active); border-radius: var(--radius-sm); display: flex; align-items: center; padding: 0 var(--space-3); }
+  .ld-logo span { color: #fff; font-weight: 800; font-size: 13px; letter-spacing: 1px; }
+  .ld-section-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--color-sidebar-muted); margin-top: var(--space-2); }
+  .ld-item {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--color-sidebar-text);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .ld-item.active { background: var(--color-sidebar-active); }
+  .ld-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-sage-mid); flex-shrink: 0; }
+  .ld-item .dot.active { background: #8FCF80; }
+  .ld-spacer { flex: 1; }
+  .ld-avatar {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-top: 1px solid var(--color-sidebar-hover);
+    margin-top: var(--space-2);
+  }
+  .ld-avatar-circle { width: 22px; height: 22px; border-radius: 50%; background: var(--color-sage-mid); flex-shrink: 0; }
+  .ld-avatar-text { font-size: 10px; color: var(--color-sidebar-text); }
+  .ld-main { flex: 1; display: flex; }
+  .ld-chat {
+    flex: 1;
+    background: var(--color-surface);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-border);
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+  .ld-chat-header { font-size: 10px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); }
+  .ld-bubble { padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: 10px; max-width: 88%; }
+  .ld-bubble.user { background: var(--color-sage-light); color: var(--color-charcoal); align-self: flex-end; }
+  .ld-bubble.ai   { background: var(--color-surface-alt); color: var(--color-charcoal-mid); align-self: flex-start; border: 1px solid var(--color-border); }
+  .ld-input { margin-top: auto; height: 26px; background: var(--color-surface-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+  .ld-preview {
+    flex: 1;
+    background: var(--color-surface-sage);
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .ld-preview-header { font-size: 10px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-sage-light); display: flex; justify-content: space-between; }
+  .ld-diagram-mock { flex: 1; border: 1px dashed var(--color-sage-light); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; }
+  .ld-diagram-mock span { font-size: 10px; color: var(--color-muted); }
+
+  /* ── Component Specs ── */
+  .component-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-4);
+    overflow: hidden;
+  }
+  .component-card-header {
+    background: var(--color-surface-alt);
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-3) var(--space-5);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .component-card-header span { font-size: 13px; font-weight: 700; color: var(--color-charcoal); }
+  .component-card-tag { font-size: 10px; background: var(--color-sage-light); color: var(--color-sage-dark); padding: 2px 8px; border-radius: 20px; font-weight: 700; }
+  .component-card-body { padding: var(--space-4) var(--space-5); }
+
+  .spec-row { display: flex; gap: var(--space-4); font-size: 12px; margin-bottom: var(--space-2); }
+  .spec-key { width: 130px; flex-shrink: 0; color: var(--color-muted); }
+  .spec-val { color: var(--color-charcoal); font-family: var(--font-mono); }
+
+  /* ── Buttons Preview ── */
+  .btn-row { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); margin-bottom: var(--space-4); }
+  .btn {
+    padding: 7px 16px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    cursor: default;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary   { background: var(--color-sage-strong); color: #fff; }
+  .btn-secondary { background: var(--color-surface-sage); color: var(--color-sage-dark); border: 1px solid var(--color-sage-light); }
+  .btn-ghost     { background: transparent; color: var(--color-charcoal-mid); border: 1px solid var(--color-border); }
+  .btn-danger    { background: var(--color-accent-rust); color: #fff; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  /* ── State Badges ── */
+  .badge-row { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3); }
+  .badge {
+    font-size: 11px; font-weight: 700; padding: 3px 9px;
+    border-radius: 20px; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .badge-green  { background: #DCF0D4; color: #2E6622; }
+  .badge-amber  { background: #FCECD4; color: #7A4810; }
+  .badge-red    { background: #FBD9D3; color: #7A1F0E; }
+  .badge-gray   { background: var(--color-surface-alt); color: var(--color-muted); border: 1px solid var(--color-border); }
+  .badge-blue   { background: #D6E9F7; color: #1F4F75; }
+
+  /* ── Input ── */
+  .input-mock {
+    display: flex; align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    max-width: 380px;
+  }
+  .input-mock-icon { width: 14px; height: 14px; border-radius: 50%; background: var(--color-sage-mid); flex-shrink: 0; }
+  .input-mock span { font-size: 12px; color: var(--color-muted); }
+
+  /* ── Divider ── */
+  .divider { border: none; border-top: 1px solid var(--color-border); margin: var(--space-6) 0; }
+
+  /* ── Token grid ── */
+  .token-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-4); }
+  .token-row { display: flex; justify-content: space-between; font-size: 12px; padding: var(--space-2) var(--space-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+  .token-name { color: var(--color-muted); }
+  .token-val  { font-family: var(--font-mono); color: var(--color-charcoal); }
+
+  /* ── Callout ── */
+  .callout {
+    background: var(--color-surface-sage);
+    border-left: 3px solid var(--color-sage-strong);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: var(--space-3) var(--space-5);
+    margin-bottom: var(--space-5);
+    font-size: 13px;
+    color: var(--color-charcoal-mid);
+  }
+  .callout strong { color: var(--color-sage-dark); }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: var(--space-12);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+    font-size: 12px;
+    color: var(--color-muted);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  
+  <h1>TRACiE — Design Guide &amp; Component Specification</h1>
+  <p class="subtitle">Developer-focused AI tool · Warm-Neutral &amp; Sage Palette · v1.0</p>
+
+  
+  <h2>1 · Color Palette</h2>
+  <p>The palette balances warm-neutral surfaces (inspired by aged paper and stone) with a muted sage green as the primary interactive accent. Charcoal anchors the sidebar and text hierarchy. All contrast ratios meet WCAG AA for text uses.</p>
+
+  <h3>Surface &amp; Background</h3>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F5F4F0"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Canvas</div>
+        <div class="swatch-hex">#F5F4F0</div>
+        <div class="swatch-role">Page background</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#FFFFFF;border-bottom:1px solid #e5e7eb"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Surface</div>
+        <div class="swatch-hex">#FFFFFF</div>
+        <div class="swatch-role">Cards, panels</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F0EFE9"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Surface Alt</div>
+        <div class="swatch-hex">#F0EFE9</div>
+        <div class="swatch-role">Row fills, input bg</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#E8EDE6"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Surface Sage</div>
+        <div class="swatch-hex">#E8EDE6</div>
+        <div class="swatch-role">Preview canvas bg</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Sage Green (Primary Accent)</h3>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#D4DDCE"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Sage Light</div>
+        <div class="swatch-hex">#D4DDCE</div>
+        <div class="swatch-role">Borders, dividers</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#8FAF85"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Sage Mid</div>
+        <div class="swatch-hex">#8FAF85</div>
+        <div class="swatch-role">Secondary accent</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#5C8A50"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Sage Strong</div>
+        <div class="swatch-hex">#5C8A50</div>
+        <div class="swatch-role">Primary CTA</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#3A5E30"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Sage Dark</div>
+        <div class="swatch-hex">#3A5E30</div>
+        <div class="swatch-role">Hover / active</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Charcoal &amp; Neutrals</h3>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#2B2D2F"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Charcoal</div>
+        <div class="swatch-hex">#2B2D2F</div>
+        <div class="swatch-role">Sidebar bg, headings</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#444749"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Charcoal Mid</div>
+        <div class="swatch-hex">#444749</div>
+        <div class="swatch-role">Body text</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#7A7D7E"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Muted</div>
+        <div class="swatch-hex">#7A7D7E</div>
+        <div class="swatch-role">Captions, labels</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#DDD9D1"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Border</div>
+        <div class="swatch-hex">#DDD9D1</div>
+        <div class="swatch-role">General borders</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Semantic / Status</h3>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#C9803A"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Amber</div>
+        <div class="swatch-hex">#C9803A</div>
+        <div class="swatch-role">Warning / highlight</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#A6442A"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Rust</div>
+        <div class="swatch-hex">#A6442A</div>
+        <div class="swatch-role">Error / destructive</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#4A7FA5"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Sky Blue</div>
+        <div class="swatch-hex">#4A7FA5</div>
+        <div class="swatch-role">Info / link</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#3E5E34"></div>
+      <div class="swatch-info">
+        <div class="swatch-name">Sidebar Active</div>
+        <div class="swatch-hex">#3E5E34</div>
+        <div class="swatch-role">Active nav on dark</div>
+      </div>
+    </div>
+  </div>
+
+  
+  <h2>2 · Typography</h2>
+  <p>Two typefaces: the system sans-serif stack for all UI copy, and a monospace stack for code, tokens, and terminal output.</p>
+
+  <div class="type-row">
+    <div class="type-label">display</div>
+    <div class="type-spec" style="font-size:28px;font-weight:700;color:#2B2D2F;line-height:1.2">TRACiE</div>
+    <div class="type-meta">28px · 700 · -0.5px</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">heading-lg</div>
+    <div class="type-spec" style="font-size:20px;font-weight:700;color:#2B2D2F">Repository Analysis</div>
+    <div class="type-meta">20px · 700 · -0.3px</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">heading-sm</div>
+    <div class="type-spec" style="font-size:15px;font-weight:700;color:#2B2D2F">Chat History</div>
+    <div class="type-meta">15px · 700</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">body</div>
+    <div class="type-spec" style="font-size:14px;color:#444749">Analyze the authentication module and generate a sequence diagram for the login flow.</div>
+    <div class="type-meta">14px · 400 · 1.6lh</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">caption</div>
+    <div class="type-spec" style="font-size:12px;color:#7A7D7E">Last updated 2 hours ago</div>
+    <div class="type-meta">12px · 400</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">label</div>
+    <div class="type-spec" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7A7D7E">REPOSITORIES</div>
+    <div class="type-meta">11px · 700 · 0.6px ls</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">mono-sm</div>
+    <div class="type-spec" style="font-family:monospace;font-size:12px;color:#3A5E30;background:#F0EFE9;padding:2px 6px;border-radius:4px;display:inline-block">const auth = require('./auth')</div>
+    <div class="type-meta">12px · mono</div>
+  </div>
+
+  
+  <h2>3 · Layout &amp; Navigation</h2>
+  <p>Three primary zones: the collapsible dark sidebar for navigation and history, the chat pane for AI interaction, and the preview canvas for live output.</p>
+
+  <div class="layout-diagram">
+    
+    <div class="ld-sidebar">
+      <div class="ld-logo"><span>TRACiE</span></div>
+      <div style="margin-top:4px">
+        <div class="ld-section-label">Workspace</div>
+        <div class="ld-item active">
+          <div class="dot active"></div> Connect Repository
+        </div>
+      </div>
+      <div>
+        <div class="ld-section-label">Chat History</div>
+        <div class="ld-item"><div class="dot"></div> Auth Flow Analysis</div>
+        <div class="ld-item"><div class="dot"></div> DB Schema Review</div>
+        <div class="ld-item"><div class="dot"></div> API Diagram Gen</div>
+        <div class="ld-item"><div class="dot"></div> Unit Test Practice</div>
+      </div>
+      <div class="ld-spacer"></div>
+      <div class="ld-avatar">
+        <div class="ld-avatar-circle"></div>
+        <div class="ld-avatar-text">Alex Morgan<br /><span style="color:#8A8D8E">alex@acme.io</span></div>
+      </div>
+    </div>
+    
+    <div class="ld-main">
+      
+      <div class="ld-chat">
+        <div class="ld-chat-header">Chat · Auth Flow Analysis</div>
+        <div class="ld-bubble ai">Analyzing your repository… Found 14 auth-related modules.</div>
+        <div class="ld-bubble user">Generate a sequence diagram for the login flow.</div>
+        <div class="ld-bubble ai">Here's the sequence diagram for the login flow →</div>
+        <div class="ld-input"></div>
+      </div>
+      
+      <div class="ld-preview">
+        <div class="ld-preview-header">
+          <span>Preview Canvas</span>
+          <span style="color:#5C8A50">● Live</span>
+        </div>
+        <div class="ld-diagram-mock">
+          <span>[ Mermaid / Diagram Output ]</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout"><strong>Sidebar collapse:</strong> At &lt;768px or via toggle, the sidebar collapses to a 48px icon rail. Chat history tree becomes a popover. Account switcher shows avatar only.</div>
+
+  <h3>Layout Dimensions</h3>
+  <table>
+    <tr><th>Zone</th><th>Width (expanded)</th><th>Width (collapsed)</th><th>Notes</th></tr>
+    <tr><td>Sidebar</td><td>220px</td><td>48px icon rail</td><td>Charcoal bg</td></tr>
+    <tr><td>Chat Pane</td><td>flex 1 (min 320px)</td><td>—</td><td>White bg, scrollable</td></tr>
+    <tr><td>Preview Canvas</td><td>flex 1 (min 400px)</td><td>—</td><td>Sage surface bg</td></tr>
+    <tr><td>Top Toolbar</td><td>100%</td><td>—</td><td>40px height</td></tr>
+  </table>
+
+  
+  <h2>4 · Spacing &amp; Radius Tokens</h2>
+  <div class="token-grid">
+    <div class="token-row"><span class="token-name">space-1</span><span class="token-val"><span class="bar" style="width:4px"></span>4px</span></div>
+    <div class="token-row"><span class="token-name">space-2</span><span class="token-val"><span class="bar" style="width:8px"></span>8px</span></div>
+    <div class="token-row"><span class="token-name">space-3</span><span class="token-val"><span class="bar" style="width:12px"></span>12px</span></div>
+    <div class="token-row"><span class="token-name">space-4</span><span class="token-val"><span class="bar" style="width:16px"></span>16px</span></div>
+    <div class="token-row"><span class="token-name">space-6</span><span class="token-val"><span class="bar" style="width:24px"></span>24px</span></div>
+    <div class="token-row"><span class="token-name">space-8</span><span class="token-val"><span class="bar" style="width:32px"></span>32px</span></div>
+    <div class="token-row"><span class="token-name">radius-sm</span><span class="token-val">4px</span></div>
+    <div class="token-row"><span class="token-name">radius-md</span><span class="token-val">8px</span></div>
+    <div class="token-row"><span class="token-name">radius-lg</span><span class="token-val">12px</span></div>
+    <div class="token-row"><span class="token-name">radius-xl</span><span class="token-val">16px</span></div>
+  </div>
+
+  
+  <h2>5 · Component Specifications</h2>
+
+  
+  <div class="component-card">
+    <div class="component-card-header">
+      <span>Button</span>
+      <span class="component-card-tag">Interactive</span>
+    </div>
+    <div class="component-card-body">
+      <div class="btn-row">
+        <button class="btn btn-primary">Connect Repository</button>
+        <button class="btn btn-secondary">Generate Diagram</button>
+        <button class="btn btn-ghost">Cancel</button>
+        <button class="btn btn-danger">Disconnect</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm">Run Analysis</button>
+        <button class="btn btn-secondary btn-sm">Export</button>
+        <button class="btn btn-ghost btn-sm">Copy</button>
+      </div>
+      <div class="spec-row" style="margin-top:12px"><span class="spec-key">Height (default)</span><span class="spec-val">36px</span></div>
+      <div class="spec-row"><span class="spec-key">Height (sm)</span><span class="spec-val">28px</span></div>
+      <div class="spec-row"><span class="spec-key">Padding</span><span class="spec-val">7px 16px / 4px 10px</span></div>
+      <div class="spec-row"><span class="spec-key">Font weight</span><span class="spec-val">600</span></div>
+      <div class="spec-row"><span class="spec-key">Primary hover</span><span class="spec-val">bg: #3A5E30 (Sage Dark)</span></div>
+      <div class="spec-row"><span class="spec-key">Focus ring</span><span class="spec-val">2px offset · #8FAF85</span></div>
+    </div>
+  </div>
+
+  
+  <div class="component-card">
+    <div class="component-card-header">
+      <span>Chat Input</span>
+      <span class="component-card-tag">Core</span>
+    </div>
+    <div class="component-card-body">
+      <div class="input-mock">
+        <div class="input-mock-icon"></div>
+        <span>Ask TRACiE about your codebase…</span>
+      </div>
+      <div style="margin-top:12px">
+        <div class="spec-row"><span class="spec-key">Height</span><span class="spec-val">min 44px, auto-grow to 140px</span></div>
+        <div class="spec-row"><span class="spec-key">Border</span><span class="spec-val">1px solid #DDD9D1 → #8FAF85 on focus</span></div>
+        <div class="spec-row"><span class="spec-key">Border radius</span><span class="spec-val">10px</span></div>
+        <div class="spec-row"><span class="spec-key">Padding</span><span class="spec-val">10px 44px 10px 14px</span></div>
+        <div class="spec-row"><span class="spec-key">Send button</span><span class="spec-val">Sage Strong · absolute right-2 bottom-2</span></div>
+        <div class="spec-row"><span class="spec-key">Attach slot</span><span class="spec-val">Left icon · opens repo file picker</span></div>
+      </div>
+    </div>
+  </div>
+
+  
+  <div class="component-card">
+    <div class="component-card-header">
+      <span>Chat Messages</span>
+      <span class="component-card-tag">Core</span>
+    </div>
+    <div class="component-card-body">
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <div style="width:26px;height:26px;border-radius:50%;background:#5C8A50;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">T</div>
+          <div style="background:#F0EFE9;border:1px solid #DDD9D1;border-radius:4px 12px 12px 12px;padding:10px 14px;font-size:13px;color:#444749;max-width:88%">Analyzing <code>auth/login.ts</code> — found a potential race condition on line 42. Here is the sequence diagram →</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start;flex-direction:row-reverse">
+          <div style="width:26px;height:26px;border-radius:50%;background:#8FAF85;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">A</div>
+          <div style="background:#D4DDCE;border-radius:12px 4px 12px 12px;padding:10px 14px;font-size:13px;color:#2B2D2F;max-width:88%">Can you also review the token refresh logic?</div>
+        </div>
+      </div>
+      <div class="spec-row"><span class="spec-key">AI bubble bg</span><span class="spec-val">#F0EFE9 · left-anchored</span></div>
+      <div class="spec-row"><span class="spec-key">User bubble bg</span><span class="spec-val">#D4DDCE · right-anchored</span></div>
+      <div class="spec-row"><span class="spec-key">Max width</span><span class="spec-val">88% of chat pane</span></div>
+      <div class="spec-row"><span class="spec-key">Avatar</span><span class="spec-val">26px circle · Sage Strong (AI) / Sage Mid (user)</span></div>
+      <div class="spec-row"><span class="spec-key">Timestamp</span><span class="spec-val">12px · Muted · on hover only</span></div>
+    </div>
+  </div>
+
+  
+  <div class="component-card">
+    <div class="component-card-header">
+      <span>Sidebar Navigation Item</span>
+      <span class="component-card-tag">Navigation</span>
+    </div>
+    <div class="component-card-body">
+      <div style="background:#2B2D2F;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
+        <div style="padding:7px 10px;border-radius:4px;font-size:12px;color:#E8EDE6;display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#8FCF80"></span>Connect Repository</div>
+        <div style="padding:7px 10px;border-radius:4px;font-size:12px;color:#E8EDE6;background:#3E5E34;display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#8FCF80"></span>Auth Flow Analysis <span style="margin-left:auto;font-size:9px;background:#5C8A50;padding:1px 6px;border-radius:10px">Active</span></div>
+        <div style="padding:7px 10px;border-radius:4px;font-size:12px;color:#8A8D8E;display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#555"></span>DB Schema Review</div>
+      </div>
+      <div class="spec-row"><span class="spec-key">Height</span><span class="spec-val">34px</span></div>
+      <div class="spec-row"><span class="spec-key">Default state</span><span class="spec-val">transparent bg · #E8EDE6 text</span></div>
+      <div class="spec-row"><span class="spec-key">Hover state</span><span class="spec-val">bg: #3A3D3F</span></div>
+      <div class="spec-row"><span class="spec-key">Active state</span><span class="spec-val">bg: #3E5E34 · white text</span></div>
+      <div class="spec-row"><span class="spec-key">Muted/archived</span><span class="spec-val">color: #8A8D8E</span></div>
+    </div>
+  </div>
+
+  
+  <div class="component-card">
+    <div class="component-card-header">
+      <span>Status Badges</span>
+      <span class="component-card-tag">Feedback</span>
+    </div>
+    <div class="component-card-body">
+      <div class="badge-row">
+        <span class="badge badge-green">● Connected</span>
+        <span class="badge badge-amber">● Analyzing</span>
+        <span class="badge badge-red">● Error</span>
+        <span class="badge badge-gray">Idle</span>
+        <span class="badge badge-blue">● Indexing</span>
+      </div>
+    </div>
+  </div>
+
+  
+  <h2>6 · Sidebar Anatomy</h2>
+  <table>
+    <tr><th>Zone</th><th>Contents</th><th>Token / Notes</th></tr>
+    <tr><td>Header (top)</td><td>TRACiE wordmark + collapse toggle</td><td>height 48px · bold 800</td></tr>
+    <tr><td>Workspace slot</td><td>"Connect Repository" CTA + repo switcher</td><td>Sage Active bg when connected</td></tr>
+    <tr><td>Chat History tree</td><td>Chronological list; nested if branched</td><td>Scroll overflow-y auto</td></tr>
+    <tr><td>Spacer</td><td>flex-grow pushes account to bottom</td><td>—</td></tr>
+    <tr><td>Account switcher</td><td>Avatar · name · email · dropdown arrow</td><td>Alex Morgan · 26px avatar</td></tr>
+  </table>
+
+  
+  <h2>7 · Preview Canvas Panels</h2>
+  <p>The right-side canvas is a dynamic panel that adapts to the current AI task. It supports three rendering modes:</p>
+  <table>
+    <tr><th>Mode</th><th>Trigger</th><th>Renderer</th></tr>
+    <tr><td>Diagram View</td><td>Generate diagram request</td><td>Mermaid.js / SVG output</td></tr>
+    <tr><td>Code Diff View</td><td>Code refactor / analysis</td><td>Monaco diff editor, read-only</td></tr>
+    <tr><td>Concept Card</td><td>Practice / quiz request</td><td>Structured markdown card</td></tr>
+  </table>
+  <div class="callout"><strong>Toolbar:</strong> Each canvas mode shows a floating top-right toolbar with Copy, Export (PNG/SVG/MD), Fullscreen, and a mode-switcher pill.</div>
+
+  
+  <h2>8 · Design Token Reference (CSS Custom Properties)</h2>
+  <table>
+    <tr><th>Token</th><th>Value</th><th>Usage</th></tr>
+    <tr><td><code>--color-canvas</code></td><td>#F5F4F0</td><td>html/body background</td></tr>
+    <tr><td><code>--color-surface</code></td><td>#FFFFFF</td><td>cards, chat pane</td></tr>
+    <tr><td><code>--color-surface-sage</code></td><td>#E8EDE6</td><td>preview canvas bg</td></tr>
+    <tr><td><code>--color-sage-strong</code></td><td>#5C8A50</td><td>primary buttons, send icon</td></tr>
+    <tr><td><code>--color-sage-dark</code></td><td>#3A5E30</td><td>hover state</td></tr>
+    <tr><td><code>--color-charcoal</code></td><td>#2B2D2F</td><td>sidebar bg, headings</td></tr>
+    <tr><td><code>--color-border</code></td><td>#DDD9D1</td><td>all hairlines</td></tr>
+    <tr><td><code>--color-muted</code></td><td>#7A7D7E</td><td>labels, timestamps</td></tr>
+    <tr><td><code>--font-sans</code></td><td>system-ui stack</td><td>all UI text</td></tr>
+    <tr><td><code>--font-mono</code></td><td>JetBrains Mono stack</td><td>code, tokens</td></tr>
+    <tr><td><code>--radius-md</code></td><td>8px</td><td>buttons, bubbles, inputs</td></tr>
+    <tr><td><code>--radius-lg</code></td><td>12px</td><td>cards, panels</td></tr>
+    <tr><td><code>--shadow-md</code></td><td>0 3px 10px rgba(0,0,0,.10)</td><td>floating panels</td></tr>
+  </table>
+
+  <div class="footer">Made with IBM Bob</div>
+</div>
+</body>
+</html>
