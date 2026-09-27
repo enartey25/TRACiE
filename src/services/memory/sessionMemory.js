@@ -34,7 +34,9 @@ function recordTurn(sessionId, { query, widget }) {
   } else if (widget.type === 'architecture_diagram') {
     summary = `Architecture diagram: ${widget.title || ''} (${widget.caption || widget.description || ''})`;
   } else if (widget.type === 'quiz') {
-    summary = `Quiz question: ${widget.question} (Explanation: ${widget.explanation || ''})`;
+    const questions = Array.isArray(widget.questions) ? widget.questions : [widget];
+    summary = `Quiz "${widget.title || ''}" with ${questions.length} question(s): ` +
+      questions.map((q, i) => `Q${i + 1}. ${q.question || ''}`).join(' ').substring(0, 1200);
   } else if (widget.type === 'flashcard_deck') {
     summary = `Flashcard deck: ${widget.title || ''} (${(widget.cards || []).length} cards)`;
   } else if (widget.type === 'doc_proposal') {

@@ -203,11 +203,24 @@ Format:
 }`;
 }
 
+// Quiz length: the number the user asked for ("quiz me with 8 questions"), else a default.
+// Capped so every question still fits in the smallest provider's output budget.
+const QUIZ_DEFAULT_QUESTIONS = 5;
+const QUIZ_MAX_QUESTIONS = 8;
+
+function resolveQuizQuestionCount(query = '') {
+  const match = String(query).match(/\b(\d{1,2})[\s-]*(?:questions?|qs?|mcqs?)\b/i);
+  const requested = match ? parseInt(match[1], 10) : QUIZ_DEFAULT_QUESTIONS;
+  return Math.min(QUIZ_MAX_QUESTIONS, Math.max(1, requested || QUIZ_DEFAULT_QUESTIONS));
+}
+
 function buildQuizPrompt({ query, chunks = [], repoName, conversationHistory = '' }) {
   const targetName = resolveTargetRepoName({ query, repoName, chunks });
   const context = chunks.map(c => `[File: ${c.file_path}]\n${c.content}`).join('\n\n');
+  const count = resolveQuizQuestionCount(query);
+  const plural = count === 1 ? '' : 's';
   return `You are the Curriculum Subagent in the TRACiE multi-agent system.
-Generate an onboarding quiz testing developer comprehension of the actual ${targetName} codebase logic.
+Generate an onboarding quiz of exactly ${count} multiple-choice question${plural} testing developer comprehension of the actual ${targetName} codebase logic.
 All questions, options, and explanations must strictly test understanding of ${targetName}. Under no circumstances should questions be about TRACiE unless ${targetName} is TRACiE.
 ${conversationHistory ? `\nPRIOR CONVERSATION HISTORY:\n${conversationHistory}\n` : ''}
 CODE CHUNKS (${targetName}):
@@ -217,21 +230,26 @@ USER QUERY:
 ${query}
 
 REQUIREMENTS:
+- Exactly ${count} question${plural} in the "questions" array.
+- Each question tests a different concept, file or behaviour; never repeat or rephrase a question.
+- Each question has exactly 4 plausible options, and the position of the correct answer varies across questions.
+- Keep each explanation to 1-2 sentences grounded in the code chunks.
+
 Return a JSON object:
 {
   "type": "quiz",
-  "question": "Clear question testing developer understanding of ${targetName}",
-  "options": [
-    "Option A",
-    "Option B",
-    "Option C",
-    "Option D"
-  ],
-  "correct_index": 0,
-  "explanation": "Why this answer is correct based on the ${targetName} codebase implementation",
-  "code_context": "Relevant file path in ${targetName}"
+  "title": "Short quiz title about ${targetName}",
+  "questions": [
+    {
+      "question": "Clear question testing developer understanding of ${targetName}",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_index": 0,
+      "explanation": "Why this answer is correct based on the ${targetName} codebase implementation",
+      "code_context": "Relevant file path in ${targetName}"
+    }
+  ]
 }
-IMPORTANT: The property must be named "correct_index" (NOT "correct_option" or "answer") and MUST be a 0-based integer from 0 to 3 corresponding to the correct option index in the "options" array.`;
+IMPORTANT: In every question the property must be named "correct_index" (NOT "correct_option" or "answer") and MUST be a 0-based integer from 0 to 3 corresponding to the correct option index in that question's "options" array.`;
 }
 
 function buildFlashcardDeckPrompt({ query, chunks = [], repoName, conversationHistory = '' }) {

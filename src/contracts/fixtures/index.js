@@ -442,16 +442,45 @@ const fixtures = {
 
   quiz: {
     type: "quiz",
-    question: "How does the TRACiE RAG pipeline ensure LLM output conforms to widget schemas?",
-    options: [
-      "Using client-side regex search after rendering",
-      "Using system prompt schema enforcement and jsonParser fallback repair",
-      "By disallowing any text longer than 100 characters",
-      "By manually approving every response in PostgreSQL"
-    ],
-    correct_index: 1,
-    explanation: "TRACiE pairs a strict system prompt prohibiting free text with jsonParser.js, which sanitizes code fences and extracts the valid JSON object.",
-    code_context: "src/services/rag/jsonParser.js"
+    title: "TRACiE Pipeline Quiz",
+    questions: [
+      {
+        question: "How does the TRACiE RAG pipeline ensure LLM output conforms to widget schemas?",
+        options: [
+          "Using client-side regex search after rendering",
+          "Using system prompt schema enforcement and jsonParser fallback repair",
+          "By disallowing any text longer than 100 characters",
+          "By manually approving every response in PostgreSQL"
+        ],
+        correct_index: 1,
+        explanation: "TRACiE pairs a strict system prompt prohibiting free text with jsonParser.js, which sanitizes code fences and extracts the valid JSON object.",
+        code_context: "src/services/rag/jsonParser.js"
+      },
+      {
+        question: "Where does TRACiE keep the conversation history used for follow-up questions?",
+        options: [
+          "In an in-memory store keyed by chat session id",
+          "In the browser's localStorage",
+          "Inside the ChromaDB vector collection",
+          "In the GitHub repository being analysed"
+        ],
+        correct_index: 0,
+        explanation: "sessionMemory.js records each turn per session id and formats the last few turns into the prompt.",
+        code_context: "src/services/memory/sessionMemory.js"
+      },
+      {
+        question: "What happens when ElevenLabs cannot synthesize an audio briefing?",
+        options: [
+          "The request fails with a 500 error",
+          "The briefing is queued and retried later",
+          "The widget falls back to the browser's built-in speech synthesis",
+          "The transcript is hidden from the user"
+        ],
+        correct_index: 2,
+        explanation: "ttsService.js returns the transcript without an audio URL, and the frontend reads it aloud with the Web Speech API.",
+        code_context: "src/services/audio/ttsService.js"
+      }
+    ]
   },
 
   flashcard_deck: {

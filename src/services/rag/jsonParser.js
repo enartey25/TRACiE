@@ -1,4 +1,23 @@
 /**
+ * Models tend to put the correct answer first, so shuffle each question's options and move
+ * correct_index with them. Skipped when an option or the explanation refers to other options
+ * by position ("All of the above", "Option B"), since shuffling would make those wrong.
+ */
+function shuffleQuizOptions(q) {
+  const positional = /\b(all|none|both|neither) of the (above|options)\b|\b(options?|answers?) [A-F]\b|\b[A-F] (and|&|or) [A-F]\b/i;
+  const idx = q.correct_index;
+  if (!Number.isInteger(idx) || idx < 0 || idx >= q.options.length) return q;
+  if (q.options.some(o => positional.test(o)) || positional.test(q.explanation)) return q;
+
+  const order = q.options.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return { ...q, options: order.map(i => q.options[i]), correct_index: order.indexOf(idx) };
+}
+
+/**
  * Sanitizes and parses raw LLM output into a verified widget JSON object.
  * Implements fallback repair for markdown code fences and malformed tokens.
  *
@@ -112,14 +131,32 @@ function parseAndValidateWidgetJSON(rawText, fallbackContext = {}) {
     }
 
     if (obj.type === 'quiz') {
-      if (Array.isArray(obj.questions)) {
-        obj.questions = obj.questions.map(q => ({
-          ...q,
-          correct_index: resolveQuizCorrectIndex(q)
+      // Always hand the UI a "questions" array, even if the model answered in the old
+      // single-question shape. Drop empty and repeated questions.
+      const list = Array.isArray(obj.questions) && obj.questions.length ? obj.questions : [obj];
+      const seen = new Set();
+      const textOf = q => q.question || q.text || q.prompt || '';
+      obj.questions = list
+        .filter(q => q && typeof q === 'object' && textOf(q) && Array.isArray(q.options) && q.options.length > 1)
+        .filter(q => {
+          const key = String(textOf(q)).trim().toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map(q => shuffleQuizOptions({
+          question: textOf(q),
+          options: q.options.map(o => String(typeof o === 'string' ? o : (o && (o.text || o.label)) || o)
+            .replace(/^[A-F][.):]\s*/i, '')),
+          correct_index: resolveQuizCorrectIndex(q),
+          explanation: q.explanation || '',
+          code_context: q.code_context || ''
         }));
-      } else {
-        obj.correct_index = resolveQuizCorrectIndex(obj);
-      }
+      delete obj.question;
+      delete obj.options;
+      delete obj.correct_index;
+      delete obj.explanation;
+      delete obj.code_context;
     }
 
     if (obj.type) return obj;

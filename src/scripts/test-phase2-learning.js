@@ -57,8 +57,10 @@ async function testPhase2LearningSuite() {
         console.log(`   - Target Role: ${widget.target_role || 'Developer'} (Est. ${widget.estimated_hours || 4} hours)`);
         console.log(`   - Modules count: ${widget.modules?.length}`);
       } else if (widget.type === 'quiz') {
-        console.log(`   - Question: "${widget.question}"`);
-        console.log(`   - Options: ${widget.options?.length} choices (Correct: Option ${widget.correct_index})`);
+        console.log(`   - Questions: ${widget.questions?.length}`);
+        (widget.questions || []).forEach((q, i) => {
+          console.log(`     ${i + 1}. "${q.question}" (${q.options?.length} choices, correct: Option ${q.correct_index})`);
+        });
       }
 
       passed++;

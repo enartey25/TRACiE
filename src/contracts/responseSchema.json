@@ -154,17 +154,28 @@
     },
     "quiz": {
       "type": "object",
-      "required": ["type", "question", "options", "correct_index", "explanation"],
+      "required": ["type", "questions"],
       "properties": {
         "type": { "const": "quiz" },
-        "question": { "type": "string" },
-        "options": {
+        "title": { "type": "string" },
+        "questions": {
           "type": "array",
-          "items": { "type": "string" }
-        },
-        "correct_index": { "type": "integer" },
-        "explanation": { "type": "string" },
-        "code_context": { "type": "string" }
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["question", "options", "correct_index", "explanation"],
+            "properties": {
+              "question": { "type": "string" },
+              "options": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "correct_index": { "type": "integer" },
+              "explanation": { "type": "string" },
+              "code_context": { "type": "string" }
+            }
+          }
+        }
       }
     },
     "flashcard_deck": {
