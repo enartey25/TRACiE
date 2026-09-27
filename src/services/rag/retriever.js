@@ -228,19 +228,29 @@ async function getIamToken() {
  * @param {number} [params.topK=5] - Number of chunks to retrieve.
  * @returns {Promise<Array<object>>} - List of relevant code chunk objects.
  */
-async function retrieveCodeChunks({ query, queryEmbedding, repoId, topK = 5 }) {
-  // [Gabriel] Primary path: indexed repository chunks via the shared Chroma client
-  // (local or Chroma Cloud, per .env). repoId = repositoryId from /api/repos; a non-UUID
-  // repoId (e.g. "TRACiE") searches all indexed repos. Code chunks only by default; git
-  // history lives in the same collection — see queryChunks({ chunkTypes: ['commit', 'pull_request'] }).
+async function retrieveCodeChunks({ query, queryEmbedding, repoId, topK = 5, chunkTypes }) {
+  const wantsHistory = query && typeof query === 'string' && /\b(commit|pr|pull request|history|author|who changed|merged|recent changes)\b/i.test(query);
+  const typesToQuery = chunkTypes || (wantsHistory ? ['code', 'commit', 'pull_request'] : ['code']);
+  const isTracieRepo = !repoId || repoId === 'TRACiE' || (typeof query === 'string' && query.toLowerCase().includes('tracie'));
+
   try {
     const hits = await queryChunks({
       embedding: queryEmbedding,
       repositoryId: UUID_RE.test(repoId || '') ? repoId : undefined,
-      chunkTypes: ['code'],
+      chunkTypes: typesToQuery,
       topK
     });
     if (hits.length > 0) return hits;
+
+    // Retry without restrictive chunkTypes filter
+    if (typesToQuery.length === 1) {
+      const relaxedHits = await queryChunks({
+        embedding: queryEmbedding,
+        repositoryId: UUID_RE.test(repoId || '') ? repoId : undefined,
+        topK
+      });
+      if (relaxedHits.length > 0) return relaxedHits;
+    }
   } catch (error) {
     console.warn('[retriever] Chroma query failed, using fallback:', error.message);
   }
@@ -252,7 +262,7 @@ async function retrieveCodeChunks({ query, queryEmbedding, repoId, topK = 5 }) {
       {
         query_embeddings: [queryEmbedding],
         n_results: topK,
-        where: repoId ? { repo_id: repoId } : undefined
+        where: repoId && repoId !== 'TRACiE' ? { repo_id: repoId } : undefined
       },
       { timeout: 3000 }
     );
@@ -278,10 +288,15 @@ async function retrieveCodeChunks({ query, queryEmbedding, repoId, topK = 5 }) {
       }));
     }
   } catch (error) {
-    // ChromaDB is unreachable or not yet populated. Fallback to ranked local chunks.
+    // ChromaDB is unreachable or not yet populated.
   }
 
-  // Fallback: Rank chunks by keyword relevance to the user's query
+  // If this query is for an external/connected repository, NEVER leak TRACiE's internal code chunks!
+  if (!isTracieRepo && repoId && repoId !== 'TRACiE') {
+    return [];
+  }
+
+  // Fallback: Rank chunks by keyword relevance to the user's query ONLY when querying TRACiE itself
   if (query && typeof query === 'string') {
     const qWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
     const scored = FALLBACK_CHUNKS.map(chunk => {

@@ -30,6 +30,9 @@ function jobView(job) {
   };
 }
 
+const { checkGitHubPermissions } = require('../services/repos/githubPermissions');
+const { scanAndResolveInconsistencies } = require('../services/docs/docConsistencyChecker');
+
 function repoView(repo) {
   return {
     id: repo.id,
@@ -38,6 +41,10 @@ function repoView(repo) {
     platform: repo.platform,
     indexStatus: repo.index_status, // pending | indexing | ready | failed
     hasToken: repo.has_token,
+    userRole: repo.user_role || 'unknown',
+    autoCommit: Boolean(repo.auto_commit),
+    commitMode: repo.commit_mode || 'pr',
+    pushBranch: repo.push_branch || 'tracie-docs-update',
     lastCommitSha: repo.last_commit_sha,
     lastIndexed: repo.last_indexed,
     historyIndexedAt: repo.history_indexed_at || null,
@@ -55,28 +62,39 @@ function validId(req, res) {
 
 /**
  * POST /api/repos
- * Body: { url: "https://github.com/owner/repo", token?: "ghp_..." }
- * 202 -> { repositoryId, jobId, repository, job }
- * Connecting an already-connected URL re-indexes it (or returns the in-flight job).
+ * Body: { url: "https://github.com/owner/repo", token?: "ghp_...", userRole?: "owner"|"contributor"|"reader" }
+ * 202 -> { repositoryId, jobId, repository, job, permissions, needsRolePrompt }
  */
 router.post('/repos', async (req, res) => {
-  const { url, token } = req.body || {};
+  const { url, token: bodyToken, userRole } = req.body || {};
   const parsed = parseGitHubUrl(url);
   if (!parsed) {
     return res.status(400).json({ error: 'Field "url" must be a GitHub repository URL, e.g. https://github.com/owner/repo' });
   }
-  if (token !== undefined && (typeof token !== 'string' || !token.trim())) {
+  if (bodyToken !== undefined && (typeof bodyToken !== 'string' || !bodyToken.trim())) {
     return res.status(400).json({ error: 'Field "token" must be a non-empty string when provided.' });
   }
 
+  // Token resolution: OAuth session → explicit body token
+  const sessionToken = req.session && req.session.github && req.session.github.accessToken;
+  const token = sessionToken || (bodyToken ? bodyToken.trim() : null);
+
   try {
+    // 1. Check Git / GitHub API permissions
+    const permResult = await checkGitHubPermissions({ url: parsed.url, token });
+    const resolvedRole = userRole || (permResult.canDetermine ? permResult.userRole : 'unknown');
+    const needsRolePrompt = !userRole && !permResult.canDetermine;
+
     const repository = await repoStore.upsertRepository({
       url: parsed.url,
       name: parsed.name,
       platform: 'github',
-      encryptedToken: token ? encrypt(token.trim()) : null
+      encryptedToken: token ? encrypt(token) : null,
+      userRole: resolvedRole
     });
 
+    // Start indexing unless a job is already actively running/pending.
+    // Previously a failed/orphaned last job would block re-indexing on reconnect.
     const active = await repoStore.getActiveJob(repository.id);
     const job = active || (await startIngestion(repository, { trigger: repository.created ? 'connect' : 'reindex' }));
 
@@ -85,7 +103,9 @@ router.post('/repos', async (req, res) => {
       jobId: job.id,
       alreadyIndexing: Boolean(active),
       repository: repoView(repository),
-      job: jobView(job)
+      job: jobView(job),
+      permissions: permResult,
+      needsRolePrompt
     });
   } catch (error) {
     console.error('[repos] connect failed:', error.message);
@@ -153,6 +173,79 @@ router.post('/repos/:id/reindex', async (req, res) => {
     const job = active || (await startIngestion(repo, { trigger: 'reindex', full }));
     res.status(202).json({ repositoryId: repo.id, jobId: job.id, alreadyIndexing: Boolean(active), job: jobView(job) });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/repos/:id/settings
+ * Body: { userRole?, autoCommit?, commitMode?, pushBranch? }
+ * -> 200 updated repository
+ */
+router.patch('/repos/:id/settings', async (req, res) => {
+  if (!validId(req, res)) return;
+  try {
+    const repo = await repoStore.getRepository(req.params.id);
+    if (!repo) return res.status(404).json({ error: 'Repository not found.' });
+
+    const { userRole, autoCommit, commitMode, pushBranch } = req.body || {};
+    const updated = await repoStore.updateRepositorySettings(req.params.id, {
+      userRole,
+      autoCommit,
+      commitMode,
+      pushBranch
+    });
+    res.json(repoView(updated));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/repos/:id/permissions
+ * Re-probes GitHub permissions for the repository.
+ */
+router.get('/repos/:id/permissions', async (req, res) => {
+  if (!validId(req, res)) return;
+  try {
+    const repo = await repoStore.getRepository(req.params.id);
+    if (!repo) return res.status(404).json({ error: 'Repository not found.' });
+    // Prefer OAuth session token for most accurate role detection
+    const sessionToken = req.session && req.session.github && req.session.github.accessToken;
+    const permResult = await checkGitHubPermissions({ url: repo.url, token: sessionToken || null });
+    res.json(permResult);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/repos/:id/scan-docs
+ * Triggers documentation inconsistency detection across indexed code chunks and documentation files.
+ * Body (optional): { autoCommit?: boolean }
+ */
+router.post('/repos/:id/scan-docs', async (req, res) => {
+  if (!validId(req, res)) return;
+  try {
+    const repo = await repoStore.getRepository(req.params.id);
+    if (!repo) return res.status(404).json({ error: 'Repository not found.' });
+
+    const autoCommitOverride = req.body && typeof req.body.autoCommit === 'boolean' ? req.body.autoCommit : undefined;
+    const result = await scanAndResolveInconsistencies({
+      repositoryId: req.params.id,
+      autoCommitOverride
+    });
+
+    res.json({
+      status: 'success',
+      repositoryId: repo.id,
+      repositoryName: repo.name,
+      scannedFiles: result.scannedFiles,
+      inconsistenciesFound: result.inconsistenciesFound,
+      proposals: result.proposals
+    });
+  } catch (error) {
+    console.error('[scan-docs] Inconsistency check failed:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

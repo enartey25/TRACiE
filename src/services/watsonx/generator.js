@@ -18,48 +18,46 @@ function generateMockResponse(prompt) {
   }
   const lower = queryText.toLowerCase();
 
+  const repoMatch = prompt.match(/\b(?:MODULE MANIFEST|CODE CHUNKS|repository|codebase)\s*\(([^\)]+)\)/i) || prompt.match(/(?:for|about|visualizing the)\s+([a-zA-Z0-9_\-\/]+)\s+codebase/i);
+  const isTracieExplicit = lower.includes('tracie') && !lower.includes('pandas') && !lower.includes('fastapi');
+  const targetRepo = isTracieExplicit ? 'TRACiE' : (repoMatch ? repoMatch[1].trim() : (lower.includes('pandas') ? 'pandas-dev/pandas' : (lower.includes('fastapi') ? 'fastapi/fastapi' : 'the target repository')));
+
   if (lower.includes('architecture') || lower.includes('diagram') || lower.includes('flow')) {
     return JSON.stringify({
       type: "architecture_diagram",
-      title: "System Architecture Flow",
-      diagram_source: "graph TD\n    Client[Web UI] --> API[Node.js Express Server]\n    API --> Watson[watsonx.ai]\n    API --> Chroma[ChromaDB]\n    API --> DB[(PostgreSQL)]",
-      caption: "High-level component interaction of TRACiE codebase onboarding platform."
+      title: `${targetRepo} Architecture Flow`,
+      diagram_source: `graph TD\n    Core[${targetRepo} Core Engine] --> API[Interface & Public APIs]\n    Core --> Storage[Data Structures & Engines]\n    Core --> Utils[Utilities & Internals]`,
+      caption: `High-level component interaction of ${targetRepo}.`
     });
   }
 
   if (lower.includes('code') || lower.includes('snippet') || lower.includes('token') || lower.includes('auth')) {
+    const isPandas = targetRepo.includes('pandas');
     return JSON.stringify({
       type: "code_snippet",
-      file_path: "src/services/watsonx/auth.js",
-      language: "javascript",
-      start_line: 14,
-      end_line: 38,
-      code: "async function getIamToken() {\n  const params = new URLSearchParams();\n  params.append('grant_type', 'urn:ibm:params:oauth:grant-type:apikey');\n  params.append('apikey', config.apiKey);\n\n  const res = await axios.post('https://iam.cloud.ibm.com/identity/token', params.toString());\n  return res.data.access_token;\n}",
-      explanation: "IBM Cloud IAM OAuth token generation function using API key credentials."
+      file_path: isPandas ? "pandas/core/dtypes/common.py" : "src/index.js",
+      language: isPandas ? "python" : "javascript",
+      start_line: 1,
+      end_line: 25,
+      code: isPandas
+        ? "def is_datetime_or_timedelta_dtype(arr_or_dtype):\n    return is_datetime64_any_dtype(arr_or_dtype) or is_timedelta64_dtype(arr_or_dtype)"
+        : "module.exports = { init: () => console.log('Initialized') };",
+      explanation: `Core implementation logic from ${targetRepo}.`
     });
   }
 
   if (lower.includes('tree') || lower.includes('structure') || lower.includes('folders')) {
     return JSON.stringify({
       type: "file_tree",
-      title: "Repository File Hierarchy",
+      title: `${targetRepo} Repository Layout`,
       root: {
-        name: "TRACiE",
+        name: targetRepo,
         type: "directory",
         path: "/",
         children: [
-          {
-            name: "src",
-            type: "directory",
-            path: "/src",
-            children: [
-              { name: "config", type: "directory", path: "/src/config", children: [] },
-              { name: "services", type: "directory", path: "/src/services", children: [] },
-              { name: "routes", type: "directory", path: "/src/routes", children: [] }
-            ]
-          },
-          { name: "package.json", type: "file", path: "/package.json" },
-          { name: ".gitignore", type: "file", path: "/.gitignore" }
+          { name: "core", type: "directory", path: "/core", children: [] },
+          { name: "tests", type: "directory", path: "/tests", children: [] },
+          { name: "docs", type: "directory", path: "/docs", children: [] }
         ]
       }
     });
@@ -68,28 +66,20 @@ function generateMockResponse(prompt) {
   if (lower.includes('config') || lower.includes('overview') || lower.includes('summary')) {
     return JSON.stringify({
       type: "composite_dashboard",
-      title: "Project Quick-Start Overview",
-      description: "Auto-generated onboarding briefing based on repository code chunks.",
+      title: `${targetRepo} Overview`,
+      description: `Auto-generated onboarding briefing based on ${targetRepo} code chunks.`,
       components: [
         {
           type: "chat_response",
-          content: "### Welcome to the TRACiE Repository\n\nThis project provides an AI-powered onboarding assistant for software engineering teams. It connects directly to the repository and provides grounded, verified answers with file/line citations.",
-          citations: [
-            {
-              file_path: "src/server.js",
-              start_line: 1,
-              end_line: 25,
-              snippet: "const express = require('express');"
-            }
-          ]
+          content: `### Welcome to ${targetRepo}\n\nThis codebase provides core engineering mechanisms. All analysis and answers are grounded strictly in the repository source code and citations.`,
+          citations: []
         },
         {
           type: "key_value_list",
-          title: "System Parameters",
+          title: "Repository Overview",
           items: [
-            { key: "Runtime", value: "Node.js v24+", description: "Backend runtime environment" },
-            { key: "Vector DB", value: "ChromaDB", description: "Storage for semantic code embeddings" },
-            { key: "AI Foundation", value: "IBM watsonx.ai", description: "Granite & Slate models" }
+            { key: "Target Repository", value: targetRepo, description: "Active codebase" },
+            { key: "Status", value: "Ready", description: "Indexed in vector database" }
           ]
         }
       ]

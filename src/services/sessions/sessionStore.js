@@ -37,6 +37,27 @@ async function listSessions(repositoryId, limit = 50) {
   return rows;
 }
 
+async function listAllSessions(limit = 50) {
+  const { rows } = await query(
+    `SELECT s.*,
+            r.name AS repo_name,
+            (SELECT count(*)::int FROM queries q WHERE q.session_id = s.id) AS query_count,
+            (SELECT q.raw_text FROM queries q WHERE q.session_id = s.id ORDER BY q.created_at ASC LIMIT 1) AS first_query,
+            (SELECT q.raw_text FROM queries q WHERE q.session_id = s.id ORDER BY q.created_at DESC LIMIT 1) AS last_query
+     FROM sessions s
+     LEFT JOIN repositories r ON r.id = s.repository_id
+     ORDER BY s.last_active DESC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+async function deleteSession(id) {
+  if (!isUuid(id)) return false;
+  const { rowCount } = await query('DELETE FROM sessions WHERE id = $1', [id]);
+  return rowCount > 0;
+}
+
 async function touchSession(id) {
   await query('UPDATE sessions SET last_active = now() WHERE id = $1', [id]);
 }
@@ -100,6 +121,6 @@ async function logTurn({ sessionId, query: rawText, chunks = [], widget = null }
 }
 
 module.exports = {
-  isUuid, createSession, getSession, listSessions, touchSession,
-  logQuery, updateQueryResponse, listQueries, logTurn
+  isUuid, createSession, getSession, listSessions, listAllSessions, touchSession,
+  logQuery, updateQueryResponse, listQueries, logTurn, deleteSession
 };

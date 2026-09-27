@@ -1,0 +1,139 @@
+/* steps.css — styles for tutorial, learning_path, workflow widgets */
+
+/* ── Progress bar (learning_path) ───────────────────────────────────────── */
+
+.uir-steps__progress {
+  margin-bottom: 1.25rem;
+}
+
+.uir-steps__progress-label {
+  font-family: var(--uir-sans);
+  font-size: 0.8125rem;
+  color: var(--uir-muted);
+  margin: 0 0 0.4rem;
+}
+
+.uir-steps__progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--uir-sage-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.uir-steps__progress-fill {
+  height: 100%;
+  background: var(--uir-slate);
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uir-steps__progress-fill {
+    transition: none;
+  }
+}
+
+/* ── Step list ──────────────────────────────────────────────────────────── */
+
+.uir-steps__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Single step row ────────────────────────────────────────────────────── */
+
+.uir-steps__item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+/* ── Left column: circle + connector line ───────────────────────────────── */
+
+.uir-steps__left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.uir-steps__circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--uir-teal);
+  color: #ffffff;
+  font-family: var(--uir-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.uir-steps__circle--done {
+  background: var(--uir-ok);
+}
+
+.uir-steps__connector {
+  width: 2px;
+  background: var(--uir-line);
+  flex: 1;
+  margin: 4px auto 0;
+  min-height: 8px;
+}
+
+/* Last step: hide the connector */
+.uir-steps__item:last-child .uir-steps__connector {
+  display: none;
+}
+
+/* ── Right column: title + body ─────────────────────────────────────────── */
+
+.uir-steps__right {
+  flex: 1;
+  padding: 0 0 24px 12px;
+  min-width: 0;
+}
+
+.uir-steps__item:last-child .uir-steps__right {
+  padding-bottom: 0;
+}
+
+.uir-steps__title {
+  font-family: var(--uir-sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--uir-text);
+  margin: 0 0 0.3rem;
+  line-height: 1.4;
+  /* Vertically align with the circle centre (circle is 28px, font ~14px) */
+  padding-top: 5px;
+}
+
+.uir-steps__body {
+  font-family: var(--uir-sans);
+  font-size: 0.875rem;
+  color: var(--uir-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Markdown output from safeMarkdown may contain <p>, <code> tags */
+.uir-steps__body p {
+  margin: 0;
+}
+
+.uir-steps__body code {
+  font-family: var(--uir-mono);
+  font-size: 0.82em;
+  background: var(--uir-code-bg);
+  border-radius: var(--uir-radius-sm);
+  padding: 0.1em 0.35em;
+}

@@ -31,12 +31,14 @@ async function generateGroqCompletion({ prompt, systemPrompt, model, jsonMode = 
   if (systemPrompt) {
     messages.push({ role: 'system', content: systemPrompt });
   }
-  messages.push({ role: 'user', content: prompt });
+  const trimmedPrompt = (prompt && prompt.length > 9000) ? (prompt.slice(0, 9000) + '\n\n[Context truncated to adhere to TPM rate limits]') : prompt;
+  messages.push({ role: 'user', content: trimmedPrompt });
 
   const options = {
     model: targetModel,
     messages,
-    temperature: 0.2
+    temperature: 0.2,
+    max_tokens: 2048
   };
 
   if (jsonMode) {
@@ -44,7 +46,38 @@ async function generateGroqCompletion({ prompt, systemPrompt, model, jsonMode = 
   }
 
   const startTime = Date.now();
-  const completion = await client.chat.completions.create(options);
+  let completion;
+  try {
+    completion = await client.chat.completions.create(options);
+  } catch (err) {
+    if (err.status === 429 || (err.message && err.message.includes('Rate limit')) || err.status === 413) {
+      const waitMs = 1000;
+      console.warn(`[Groq] Rate limit hit on ${targetModel}. Retrying in ${waitMs}ms...`);
+      await new Promise(r => setTimeout(r, waitMs));
+      try {
+        completion = await client.chat.completions.create(options);
+      } catch (retryErr) {
+        try {
+          console.warn(`[Groq] Trying available model 'qwen/qwen3.8-27b'...`);
+          completion = await client.chat.completions.create({ ...options, model: 'qwen/qwen3.8-27b' });
+        } catch (qwenErr) {
+          if (targetModel !== 'openai/gpt-oss-20b') {
+            console.warn(`[Groq] Trying available model 'openai/gpt-oss-20b'...`);
+            completion = await client.chat.completions.create({ ...options, model: 'openai/gpt-oss-20b' });
+          } else {
+            throw retryErr;
+          }
+        }
+      }
+    } else if (err.message && err.message.includes('json_validate_failed')) {
+      console.warn(`[Groq] json_validate_failed on ${targetModel}: retrying without strict json_object constraint...`);
+      const fallbackOptions = { ...options };
+      delete fallbackOptions.response_format;
+      completion = await client.chat.completions.create(fallbackOptions);
+    } else {
+      throw err;
+    }
+  }
   const durationMs = Date.now() - startTime;
 
   const choice = completion.choices[0];

@@ -232,6 +232,14 @@ async function runJob({ repository, job, token }) {
 
     await repoStore.updateJob(jobId, { status: 'complete', stage: 'done', completed_at: new Date() });
     log(jobId, 'job complete');
+
+    // Automatically scan codebase chunks against documentation files for inconsistencies
+    try {
+      const { scanAndResolveInconsistencies } = require('../docs/docConsistencyChecker');
+      scanAndResolveInconsistencies({ repositoryId: repository.id })
+        .then(res => log(jobId, `Doc consistency check complete (${res.inconsistenciesFound} proposal(s))`))
+        .catch(err => console.warn('[ingestion] Doc consistency check note:', err.message));
+    } catch (_) {}
   } catch (error) {
     const message = redact(error.message, token);
     log(jobId, `FAILED: ${message}`);

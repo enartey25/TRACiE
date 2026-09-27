@@ -169,7 +169,40 @@ async function queryChunks({ embedding, repositoryId, chunkTypes, topK = 5 }) {
   });
 }
 
+/**
+ * Fetch stored chunks for a repository directly without requiring a query embedding.
+ */
+async function getRepositoryChunks({ repositoryId, chunkTypes, limit = 15 }) {
+  const collection = await getCollection();
+  const filters = [];
+  if (repositoryId) filters.push({ repository_id: repositoryId });
+  if (chunkTypes && chunkTypes.length) filters.push({ chunk_type: { $in: chunkTypes } });
+
+  const where = filters.length === 0 ? undefined : filters.length === 1 ? filters[0] : { $and: filters };
+  const result = await collection.get({
+    where,
+    limit,
+    include: ['documents', 'metadatas']
+  });
+
+  const ids = result.ids || [];
+  return ids.map((id, i) => {
+    const metadata = (result.metadatas || [])[i] || {};
+    return {
+      chunk_id: id,
+      chunk_type: metadata.chunk_type || 'code',
+      content: (result.documents || [])[i] || '',
+      file_path: metadata.file_path,
+      language: metadata.language,
+      start_line: metadata.start_line,
+      end_line: metadata.end_line,
+      module_name: metadata.module_name,
+      metadata
+    };
+  });
+}
+
 module.exports = {
   getClient, getCollection, ping, upsertChunks, deleteRepositoryChunks, deleteFileChunks, deleteWhere,
-  getExisting, queryChunks
+  getExisting, queryChunks, getRepositoryChunks
 };

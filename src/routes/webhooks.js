@@ -85,4 +85,48 @@ router.post('/github', express.raw({ type: '*/*', limit: '25mb' }), async (req, 
   }
 });
 
+/**
+ * POST /api/webhooks/test — simulate a GitHub push webhook for UI testing
+ * Body: { repo: "owner/repo", branch?: "main", commitSha?: string }
+ */
+router.post('/test', express.json(), async (req, res) => {
+  const { repo, branch = 'main', commitSha = 'test-sha-' + Date.now().toString(36) } = req.body || {};
+  if (!repo) return res.status(400).json({ error: 'Field "repo" is required (e.g. "expressjs/express").' });
+
+  const parsed = parseGitHubUrl(repo);
+  if (!parsed) return res.status(400).json({ error: 'Invalid repository name or URL.' });
+
+  try {
+    const repository = await repoStore.findRepositoryByUrl(parsed.url);
+    if (!repository) {
+      return res.status(404).json({ error: `Repository ${parsed.name} is not connected to TRACiE. Please connect it first.` });
+    }
+
+    const active = await repoStore.getActiveJob(repository.id);
+    if (active) {
+      await repoStore.setPendingReindex(repository.id, true);
+      return res.status(202).json({
+        ok: true,
+        simulated: true,
+        message: 'Active job running; queued follow-up re-index on completion.',
+        repositoryId: repository.id,
+        jobId: active.id,
+        queued: true
+      });
+    }
+
+    const job = await startIngestion(repository, { trigger: 'webhook' });
+    return res.status(202).json({
+      ok: true,
+      simulated: true,
+      message: `Triggered webhook push re-index for ${parsed.name} (commit ${commitSha.slice(0, 7)})`,
+      repositoryId: repository.id,
+      jobId: job.id,
+      queued: false
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

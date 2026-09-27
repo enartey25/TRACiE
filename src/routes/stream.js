@@ -8,6 +8,7 @@ const { executeRAGQuery } = require('../services/rag/pipeline');
 async function handleStream(req, res) {
   const query = req.method === 'GET' ? req.query.query : req.body?.query;
   const repoId = req.method === 'GET' ? req.query.repoId : req.body?.repoId;
+  const repoName = req.method === 'GET' ? req.query.repoName : req.body?.repoName;
   const sessionId = req.method === 'GET' ? req.query.sessionId : req.body?.sessionId;
 
   if (!query || typeof query !== 'string' || !query.trim()) {
@@ -39,6 +40,7 @@ async function handleStream(req, res) {
     const widget = await executeRAGQuery({
       query: query.trim(),
       repoId,
+      repoName,
       sessionId,
       onThought: (thought) => {
         if (!isClientConnected) return;

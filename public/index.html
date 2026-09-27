@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRACiE &#x2014; Chat and Canvas</title>
+  <meta name="description" content="Explore your project with TRACiE.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css?v=2.9">
+  <link rel="stylesheet" href="renderer/ui-renderer.css">
+  <!-- Playfair Display for UIRenderer serif titles -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<main class="tracy-shell" id="tracyShell">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+
+    <div class="brand-row">
+      <div class="brand-mark" aria-hidden="true">&#x2723;</div>
+      <div class="brand-name">TRACiE</div>
+      <button class="collapse-button" id="collapseBtn" aria-label="Collapse sidebar">&#x2039;</button>
+    </div>
+
+    <nav class="primary-nav" aria-label="Primary navigation">
+      <button class="nav-item active" id="navNewChat" aria-label="New chat">
+        <span class="icon" aria-hidden="true">&#x270E;</span>
+        <span>New chat</span>
+      </button>
+      <button class="nav-item" id="navSearch" aria-label="Search">
+        <span class="icon" aria-hidden="true">&#x2315;</span>
+        <span>Search</span>
+      </button>
+      <button class="nav-item" id="navGallery" aria-label="Component Gallery">
+        <span class="icon" aria-hidden="true">&#x25A5;</span>
+        <span>Component Gallery</span>
+      </button>
+    </nav>
+
+    <section class="repository-card" aria-label="Connect repository">
+      <h2>Connect Repository</h2>
+      <div class="repo-input">
+        <span class="repo-icon" aria-hidden="true">&#x2663;</span>
+        <input type="text" id="repoInput" placeholder="https://github.com/example" aria-label="Repository URL or name" autocomplete="off">
+      </div>
+      <button class="dark-button" id="connectBtn">Connect Codebase</button>
+      <div class="connected-repositories" id="connectedRepos">
+        <span class="connected-label">Connected Repositories</span>
+        <div id="connectedList">
+          <p class="no-repos-msg" id="noReposMsg">No repositories connected.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="history" id="historyPanel">
+      <div class="history-loading" style="padding: 12px 18px; color: var(--muted); font-size: 12px; font-style: italic;">Loading chat history...</div>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="nav-item settings-item" id="navSettings" aria-label="Settings">
+        <span class="icon" aria-hidden="true">&#x2699;</span>
+        <span>Settings</span>
+      </button>
+
+      <!-- GitHub OAuth profile area — populated by app.js on load -->
+      <div class="github-auth-area" id="githubAuthArea">
+        <!-- Logged-out state (default, hidden when authenticated) -->
+        <a href="/auth/github" id="githubLoginBtn" class="github-login-btn" title="Login with GitHub to enable doc commits">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          Login with GitHub
+        </a>
+
+        <!-- Logged-in state (hidden by default, shown when authenticated) -->
+        <div class="github-profile-row" id="githubProfileRow" style="display:none">
+          <img id="githubAvatar" src="" alt="GitHub avatar" class="github-avatar" width="28" height="28">
+          <div class="github-profile-info">
+            <span class="github-username" id="githubUsername"></span>
+            <span class="github-badge">GitHub &#x2713;</span>
+          </div>
+          <button class="github-logout-btn" id="githubLogoutBtn" title="Sign out from GitHub">&#x2715;</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <section class="workspace">
+
+    <div class="topbar">
+      <div class="mode-switch">
+        <button class="mode-btn active" id="modeChat">Chat and Canvas</button>
+        <button class="mode-btn" id="modePending">Pending Docs</button>
+      </div>
+    </div>
+
+    <div class="content" id="contentArea">
+
+      <!-- Search overlay -->
+      <div class="search-overlay" id="searchOverlay" style="display:none" role="dialog" aria-modal="true" aria-label="Search">
+        <div class="search-modal">
+          <div class="search-header">
+            <span class="icon" aria-hidden="true">&#x2315;</span>
+            <input type="text" id="searchInput" placeholder="Search conversations..." aria-label="Search conversations" autocomplete="off">
+            <button class="close-btn" id="closeSearch" aria-label="Close search">&#x2715;</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Practice tools popover -->
+      <div class="practice-popover" id="practicePopover" style="display:none">
+        <strong>Choose Representation</strong>
+        <span>Select a widget to format the response (overrides auto selection):</span>
+        <button data-tool="Quiz"><span>&#x270E;</span> Quiz</button>
+        <button data-tool="Flashcards"><span>&#x25A4;</span> Flashcards</button>
+        <button data-tool="Architecture diagram"><span>&#x1F5FA;</span> Architecture diagram</button>
+        <button data-tool="Flowchart"><span>&#x2934;</span> Flowchart</button>
+        <button data-tool="Code exercise"><span>&lt;&gt;</span> Code snippet</button>
+        <button data-tool="Audio overview"><span>&#x25C9;</span> Audio overview</button>
+        <button data-tool="Tutorial guide"><span>&#x1F4D6;</span> Tutorial guide</button>
+        <button data-tool="File tree"><span>&#x1F4C1;</span> Directory tree</button>
+      </div>
+
+      <!-- HERO / WELCOME VIEW -->
+      <div id="heroView">
+        <div class="hero">
+          <div class="hero-mark" aria-hidden="true">&#x2723;<sup>+</sup></div>
+          <h1>What can I help you find?</h1>
+          <p>Ask a question about the project, or request a guide to understanding its functionality</p>
+        </div>
+        <div class="suggestions">
+          <button class="suggestion-card" id="suggSchema">
+            <span class="suggestion-icon" aria-hidden="true">&#x2315;</span>
+            <span class="suggestion-arrow" aria-hidden="true">&#x2197;</span>
+            <strong>Get database schema</strong>
+            <small>View the schema of the project</small>
+          </button>
+          <button class="suggestion-card" id="suggSummary">
+            <span class="suggestion-icon" aria-hidden="true">&#x25A4;</span>
+            <span class="suggestion-arrow" aria-hidden="true">&#x2197;</span>
+            <strong>Draft a project summary</strong>
+            <small>Obtain a documentation-based summary</small>
+          </button>
+        </div>
+      </div>
+
+      <!-- SPLIT VIEW (chat + canvas) -->
+      <div class="split-view" id="splitView" style="display:none">
+        <section class="chat-panel">
+          <div class="chat-header-bar" id="chatHeaderBar" style="display:flex;justify-content:flex-end;padding:8px 16px 0 16px;">
+            <button id="openCanvasBtn" class="open-canvas-pill" style="display:none;" title="Show Canvas output">
+              <span>&#x25A3;</span> Show Canvas
+            </button>
+          </div>
+          <div class="message-list" id="messageList"></div>
+        </section>
+        <aside class="canvas-panel" id="canvasPanel">
+          <header>
+            <div>
+              <strong id="canvasTitle">Database schema preview</strong>
+              <span>Loading referenced output</span>
+            </div>
+            <button id="closeCanvas" aria-label="Close canvas">&#x2715;</button>
+          </header>
+          <div class="canvas-prompt-nav" id="canvasPromptNav" style="display:none;"></div>
+          <div class="canvas-preview" id="canvasPreview">
+            <div class="canvas-loader-wrap" aria-hidden="true">&#x25A3;</div>
+            <strong style="font-size:15px;color:var(--ink);">Loading image preview</strong>
+            <span style="font-size:13px;color:var(--muted);">The referenced output is opening in the canvas</span>
+            <div class="canvas-progress"><div class="canvas-progress-fill"></div></div>
+            <small style="font-size:12px;color:var(--muted);">Fetching referenced output</small>
+          </div>
+          <p class="api-error" id="canvasError" role="alert" style="display:none"></p>
+        </aside>
+      </div>
+
+      <!-- Role & Automation Settings Modal -->
+      <div class="role-modal-overlay" id="roleModalOverlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Repository Contributor Access">
+        <div class="role-modal-card">
+          <div class="role-modal-header">
+            <div class="role-modal-icon">&#x1F419;</div>
+            <div class="role-modal-title-group">
+              <h3 id="roleModalRepoName">Repository Access</h3>
+              <p id="roleModalSubtitle">Confirm your collaboration role for this codebase</p>
+            </div>
+            <button class="close-btn" id="closeRoleModal" aria-label="Close dialog">&#x2715;</button>
+          </div>
+          <div class="role-modal-body">
+            <p class="role-modal-question">Are you an <strong>owner</strong> or <strong>contributor</strong> of this repository with commit access?</p>
+            <div class="role-options">
+              <label class="role-option-card">
+                <input type="radio" name="userRepoRole" value="contributor" checked>
+                <div class="role-option-content">
+                  <strong>Yes, I have write access</strong>
+                  <span>Allow TRACiE to generate and propose documentation updates for commit.</span>
+                </div>
+              </label>
+              <label class="role-option-card">
+                <input type="radio" name="userRepoRole" value="reader">
+                <div class="role-option-content">
+                  <strong>No, read-only explorer</strong>
+                  <span>Browse codebase, generate diagrams, and query documentation without committing.</span>
+                </div>
+              </label>
+            </div>
+
+            <div class="role-automation-section" id="roleAutomationSettings">
+              <h4>Documentation Automation</h4>
+              <label class="automation-toggle-label">
+                <input type="checkbox" id="roleAutoCommitToggle">
+                <span>Automatically commit &amp; push updates when documentation drift is detected</span>
+              </label>
+              <div class="role-commit-mode-row">
+                <span>Commit Strategy:</span>
+                <select id="roleCommitModeSelect">
+                  <option value="pr" selected>Create Pull Request (Recommended)</option>
+                  <option value="direct">Direct Commit to Branch</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="role-modal-actions">
+            <button class="role-cancel-btn" id="cancelRoleModal">Skip</button>
+            <button class="role-save-btn" id="saveRoleModal">Save &amp; Continue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PENDING DOCS VIEW -->
+      <div id="pendingView" style="display:none; flex-direction:column; width:100%; height:100%; overflow-y:auto; padding:24px 32px;">
+        <div class="pending-header-banner">
+          <div>
+            <h1 class="pending-main-title">Pending Documentation Proposals</h1>
+            <p class="pending-subtitle">Detect inconsistencies between codebase reality and project documentation</p>
+          </div>
+          <div class="pending-toolbar-controls">
+            <div class="pending-repo-badge" id="pendingRepoBadge">
+              <span class="dot"></span>
+              <span id="pendingRepoLabel">Active Repo: None</span>
+              <span class="role-pill" id="pendingRolePill">Role: Unknown</span>
+            </div>
+            <div class="pending-settings-group">
+              <label class="pending-setting-item" title="Toggle automatic commit upon detecting inconsistency">
+                <span style="font-size:12px;font-weight:500;">Auto-Commit:</span>
+                <input type="checkbox" id="pendingAutoCommitToggle">
+              </label>
+              <select id="pendingCommitModeSelect" class="pending-select" title="Commit strategy">
+                <option value="pr">Mode: Pull Request</option>
+                <option value="direct">Mode: Direct Push</option>
+              </select>
+            </div>
+            <button class="dark-button" id="scanInconsistenciesBtn">
+              <span class="btn-icon">&#x21BB;</span> Scan for Inconsistencies
+            </button>
+          </div>
+        </div>
+        <div id="pendingNotification" class="pending-notification" style="display:none;"></div>
+        <div id="pendingList"></div>
+      </div>
+
+
+      <!-- COMPONENT GALLERY VIEW -->
+      <div id="galleryView" style="display:none">
+        <div class="gallery-page">
+          <div class="gallery-intro">
+            <div class="eyebrow">Component Gallery</div>
+            <h1>UI Widgets</h1>
+            <p>TRACiE output component library</p>
+          </div>
+          <div class="widget-grid">
+            <div class="widget-spec">
+              <div class="widget-label">Schema widget</div>
+              <h2>Database schema</h2>
+              <p>Visualises relational table structures from the queried codebase.</p>
+              <div class="table-row"><span>users</span><span>sessions</span><span>repositories</span></div>
+              <div class="table-lines"></div>
+            </div>
+            <div class="widget-spec">
+              <div class="widget-label">Summary widget</div>
+              <h2>Project summary</h2>
+              <p>Generates a high-level overview of the project architecture and purpose.</p>
+              <div class="architecture-row"><span>Frontend</span><span>Backend</span><span>Database</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPOSER -->
+      <div class="composer" id="composer">
+        <button class="add-button" id="addBtn" aria-label="Open practice tools">+</button>
+        <span class="practice-tag" id="practiceTag" style="display:none">
+          <span id="practiceTagLabel"></span>
+          <input type="hidden" name="practice_type" id="practiceTypeInput">
+          <button class="remove-tag" id="removePracticeTag" aria-label="Remove practice tool">&#x2715;</button>
+        </span>
+        <input type="text" id="queryInput" placeholder="Ask anything..." aria-label="Ask anything" autocomplete="off">
+        <button class="send-button" id="sendBtn" aria-label="Send message">&#x2191;</button>
+      </div>
+      <p class="disclaimer">AI can make mistakes. Check important information and review cited sources.</p>
+
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<!-- Prism for UIRenderer code highlighting -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/themes/prism.min.css">
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1/prism.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1/plugins/line-numbers/prism-line-numbers.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/plugins/line-numbers/prism-line-numbers.min.css">
+<!-- UIRenderer engine + widgets -->
+<script src="renderer/ui-renderer.js"></script>
+<script src="renderer/widgets/manifest.js"></script>
+<script src="app.js?v=3.4"></script>
+</body>
+</html>
