@@ -21,8 +21,13 @@ const state = {
   user: null,
   sessions: [],
   prefs: { showAgentActivity: true, autoOpenCanvas: true },
+  chatEpoch: 0, // bumped whenever the visible chat changes, so late replies from the old one are dropped
 };
 window.state = state;
+
+// The page always opens on an empty chat, so don't let a chat id left over from before a
+// reload carry the old conversation's server-side context into it.
+sessionStorage.removeItem('tracie_session');
 
 // ---- API access -------------------------------------------------
 // Every /api call needs a signed-in GitHub user. A 401 means the session ended,
@@ -152,6 +157,7 @@ try {
 // ---- Nav: New Chat -----------------------------------------------
 navNewChat.addEventListener('click', newChat);
 function newChat() {
+  state.chatEpoch++;
   state.sent = false;
   state.messages = [];
   state.turns = [];
@@ -821,6 +827,7 @@ async function sendMessage(text, canvasType) {
   }
 
   const currentTurnId = state.turns.length;
+  const chatEpoch = state.chatEpoch;
   state.sent = true;
   state.isQuerying = true;
   state.canvasType = canvasType;
@@ -851,6 +858,15 @@ async function sendMessage(text, canvasType) {
   const activeRepoObj = state.connected.find(r => r.id === repoId);
   const repoName = activeRepoObj ? activeRepoObj.name : '';
   const sessionId = await ensureSessionId();
+  const isStale = () => chatEpoch !== state.chatEpoch;
+  if (isStale()) {
+    // New Chat was clicked while the session was being created: don't send this into it
+    if (sessionStorage.getItem('tracie_session') === sessionId) sessionStorage.removeItem('tracie_session');
+    state.isQuerying = false;
+    sendBtn.innerHTML = '&#x2191;';
+    sendBtn.disabled = false;
+    return;
+  }
 
   const requestedWidget = state.practiceTag
     ? state.practiceTag.toLowerCase()
@@ -864,7 +880,7 @@ async function sendMessage(text, canvasType) {
       sessionId: sessionId,
       requestedWidget: requestedWidget
     }, function(event, data) {
-      if (!data) return;
+      if (!data || isStale()) return;
       if (event === 'status' && data.message) {
         progressMsg.status = data.message;
       } else if (event === 'agent_handoff') {
@@ -875,6 +891,7 @@ async function sendMessage(text, canvasType) {
       }
       updateProgressBubble(progressMsg);
     });
+    if (isStale()) return; // user moved to another chat while this one was answering
     dropProgress();
     const widgets = payload.widgets || (payload.widget ? [payload.widget] : (payload.type ? [payload] : []));
     state.apiWidgets = widgets;
@@ -1021,6 +1038,7 @@ async function sendMessage(text, canvasType) {
     state.practiceTag = '';
     updatePracticeTag();
   } catch (err) {
+    if (isStale()) return;
     dropProgress();
     const errMsg = err.message || 'Unable to reach the TRACiE API.';
     state.apiError = errMsg;
@@ -1417,6 +1435,7 @@ async function loadSidebarHistory() {
 
 async function loadSession(sessionId) {
   if (!sessionId) return;
+  state.chatEpoch++;
   sessionStorage.setItem('tracie_session', sessionId);
 
   // Update selection visually

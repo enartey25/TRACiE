@@ -129,14 +129,12 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, userId, con
   const lastTurn = hasPriorTurns ? sessionHistory[sessionHistory.length - 1] : null;
   const isFollowUp = Boolean(sessionId && (hasPriorTurns || isFollowUpQuery(query)));
 
-  // If follow-up, use context-aware cache key incorporating preceding query so it never collides with generic cross-session queries
-  const effectiveCacheKey = isFollowUp && lastTurn
-    ? `${cacheKey}::followup::${lastTurn.userQuery}`
-    : cacheKey;
-
-  // -- Step 0: Semantic / Fast-Path Response Cache ---------------------------
-  const shouldCheckCache = !isFollowUp || (isFollowUp && Boolean(lastTurn));
-  const cachedWidget = shouldCheckCache ? getCachedResponse(query, effectiveCacheKey, requestedWidget) : null;
+  // -- Step 0: Fast-Path Response Cache --------------------------------------
+  // The cache is shared by every chat, so it only holds answers that didn't depend on a
+  // conversation. Follow-ups are answered with this chat's history and never cached, otherwise
+  // a new chat could be served an answer shaped by another chat's context.
+  const cacheable = !isFollowUp;
+  const cachedWidget = cacheable ? getCachedResponse(query, cacheKey, requestedWidget) : null;
   if (cachedWidget) {
     if (onThought) {
       onThought({
@@ -276,8 +274,8 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, userId, con
     timestamp: new Date().toISOString()
   };
 
-  // Cache response for instant repeat queries
-  setCachedResponse(query, effectiveCacheKey, requestedWidget, widget);
+  // Cache response for instant repeat queries (context-free turns only, see Step 0)
+  if (cacheable) setCachedResponse(query, cacheKey, requestedWidget, widget);
 
   return widget;
 }
