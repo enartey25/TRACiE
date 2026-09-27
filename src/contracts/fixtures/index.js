@@ -46,64 +46,188 @@ const fixtures = {
 
   architecture_diagram: {
     type: "architecture_diagram",
-    title: "TRACiE Connected Subsystem Topology (Supabase-Style)",
+    title: "TRACiE Multi-Agent RAG Pipeline & System Architecture",
     diagram_source: `flowchart TD
-    subgraph Presentation ["🖥️ Presentation Layer (Developer Canvas)"]
-      UI["public/index.html & app.js"]
-      SSEListener["EventSource SSE Client"]
-    end
+ %% User Interface
+ subgraph UI["Frontend & Interaction"]
+ direction TB
+ Browser["Browser / Developer Canvas"]
+ HTML["public/index.html"]
+ CSS["public/index.css"]
+ JS["public/app.js"]
+ Browser --> HTML
+ HTML --> CSS
+ HTML --> JS
+ end
 
-    subgraph APILayer ["⚡ Express API Gateway (port 3000)"]
-      Server["src/server.js"]
-      StreamEndpoint["/api/stream (SSE)"]
-      QueryEndpoint["/api/query (REST)"]
-      DocsEndpoint["/api/docs (Proposals)"]
-      AudioEndpoint["/api/audio (TTS)"]
-    end
+ %% API Layer
+ subgraph API["API Gateway & Routes"]
+ direction TB
+ Server["src/server.js<br/>(Express HTTP & SSE)"]
+ 
+ subgraph Routes["Route Handlers"]
+ direction TB
+ RQuery["routes/query.js"]
+ RStream["routes/stream.js"]
+ RDocs["routes/docs.js"]
+ RAudio["routes/audio.js"]
+ RSess["routes/session.js"]
+ RRepos["routes/repos.js"]
+ RWebhooks["routes/webhooks.js"]
+ end
+ 
+ Server --> Routes
+ end
 
-    subgraph AgentCore ["🧠 IBM BeeAI Multi-Agent Core"]
-      Supervisor["Supervisor (supervisor.js)"]
-      RunSubagent["Subagent Runner (runSubagent.js)"]
-      ArchitectAgent["ArchitectSubagent (Diagrams)"]
-      ExplainerAgent["CodeExplainerSubagent"]
-      NavAgent["NavigatorSubagent (Layout)"]
-      CurriculumAgent["CurriculumSubagent (Quiz/Deck)"]
-      DocAgent["DocWriterSubagent (Diffs)"]
-      AudioAgent["AudioSubagent (Voice)"]
-    end
+ %% Core Orchestration
+ subgraph Core["Core Orchestration & Agents"]
+ direction TB
+ Supervisor["services/agents/supervisor.js<br/>(BeeAI Multi-Agent Supervisor)"]
+ Subagent["services/agents/runSubagent.js"]
+ Prompts["src/prompts/<br/>systemPrompt.js<br/>promptTemplates.js"]
+ 
+ Supervisor --> Subagent
+ Subagent --> Prompts
+ end
 
-    subgraph Intelligence ["⚙️ RAG & Knowledge Services"]
-      RAG["src/services/rag/pipeline.js"]
-      Retriever["src/services/rag/retriever.js"]
-      Parser["src/services/rag/jsonParser.js"]
-      Memory["src/services/memory/sessionMemory.js"]
-      Enricher["src/services/enrichment/contextEnricher.js"]
-    end
+ %% RAG Pipeline
+ subgraph RAG["RAG Pipeline & Retrieval"]
+ direction TB
+ RAGPipeline["services/rag/pipeline.js"]
+ Retriever["services/rag/retriever.js"]
+ Cache["services/rag/ragCache.js"]
+ Parser["services/rag/jsonParser.js"]
+ Enricher["services/enrichment/contextEnricher.js"]
+ 
+ RAGPipeline --> Retriever
+ RAGPipeline --> Enricher
+ Retriever --> Cache
+ Retriever --> Parser
+ end
 
-    subgraph External ["🌐 External Engines & Storage"]
-      Chroma["ChromaDB Vector Store (port 8000)"]
-      Groq["Groq LPU (gpt-oss-120b)"]
-      WatsonX["IBM watsonx.ai (Granite 3.0)"]
-      ElevenLabs["ElevenLabs Studio (Turbo v2.5)"]
-    end
+ %% Ingestion Pipeline
+ subgraph Ingestion["Data Ingestion & Indexing"]
+ direction TB
+ IngestPipeline["services/ingestion/pipeline.js"]
+ Fetcher["services/ingestion/fetchRepo.js"]
+ Walker["services/ingestion/fileWalker.js"]
+ Chunker["services/ingestion/chunker.js"]
+ Embedder["services/ingestion/embedder.js"]
+ History["services/ingestion/history.js"]
+ 
+ IngestPipeline --> Fetcher
+ Fetcher --> Walker
+ Walker --> Chunker
+ Chunker --> Embedder
+ Embedder --> History
+ end
 
-    UI -->|User Question| StreamEndpoint
-    StreamEndpoint --> Server
-    Server --> RAG
-    RAG --> Memory
-    RAG --> Enricher
-    RAG --> Retriever
-    Retriever -->|Cosine Similarity ANN| Chroma
-    RAG --> Supervisor
-    Supervisor -->|Intent Routing| AgentCore
-    AgentCore --> RunSubagent
-    RunSubagent -->|Ultra-Fast Inference| Groq
-    RunSubagent -.->|Enterprise Model| WatsonX
-    AudioAgent -->|Studio Audio MP3| ElevenLabs
-    RunSubagent --> Parser
-    Parser -->|Validated JSON Widget| Server
-    Server -->|SSE agent_thought & complete| SSEListener
-    SSEListener --> UI`,
+ %% AI Providers
+ subgraph AI["AI Providers & Generators"]
+ direction TB
+ subgraph WatsonX["IBM WatsonX"]
+ WAuth["services/watsonx/auth.js"]
+ WEmbed["services/watsonx/embedding.js"]
+ WGen["services/watsonx/generator.js"]
+ end
+ 
+ subgraph Groq["Groq"]
+ GGen["services/groq/generator.js"]
+ end
+ 
+ subgraph HF["HuggingFace"]
+ HGen["services/huggingface/generator.js"]
+ end
+ 
+ TTS["services/audio/ttsService.js"]
+ end
+
+ %% Data Stores
+ subgraph Data["Data Persistence & Memory"]
+ direction TB
+ subgraph VectorDB["Vector Database (Chroma)"]
+ Chroma["src/db/chroma.js"]
+ ChromaData["chroma_data/<br/>(.bin, .sqlite3)"]
+ Chroma --> ChromaData
+ end
+ 
+ subgraph RelationalDB["Relational Database (Postgres)"]
+ Postgres["src/db/postgres.js"]
+ Migrate["src/db/migrate.js"]
+ Migrations["migrations/<br/>(.sql)"]
+ Postgres --> Migrate
+ Migrate --> Migrations
+ end
+ 
+ SessionMem["services/memory/sessionMemory.js"]
+ RepoStore["services/repos/repoStore.js"]
+ SessionStore["services/sessions/sessionStore.js"]
+ DocStore["services/docs/proposalStore.js"]
+ end
+
+ %% Config & Utils
+ subgraph Config["Configuration & Utilities"]
+ direction TB
+ EnvConfig["src/config/backend.js"]
+ WConfig["src/config/watsonx.js"]
+ Crypto["src/utils/crypto.js"]
+ Contracts["src/contracts/<br/>(responseSchema.json)"]
+ end
+
+ %% Connections: UI to API
+ JS -->|"HTTP / SSE"| Server
+
+ %% Connections: API to Core
+ RQuery --> Supervisor
+ RStream --> Supervisor
+ RDocs --> DocStore
+ RAudio --> TTS
+ RSess --> SessionStore
+ RRepos --> RepoStore
+ RWebhooks --> IngestPipeline
+
+ %% Connections: Core to RAG & AI
+ Supervisor --> RAGPipeline
+ Supervisor --> WGen
+ Supervisor --> GGen
+ Supervisor --> HGen
+ 
+ %% Connections: RAG to Data
+ Retriever --> Chroma
+ Enricher --> SessionMem
+ 
+ %% Connections: Ingestion to Data & AI
+ Embedder --> WEmbed
+ Embedder --> Chroma
+ IngestPipeline --> RepoStore
+ 
+ %% Connections: AI to Config
+ WAuth --> WConfig
+ WEmbed --> WConfig
+ WGen --> WConfig
+ 
+ %% Connections: Data to Config
+ Postgres --> EnvConfig
+ Chroma --> EnvConfig
+ 
+ %% Styling
+ classDef ui fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+ classDef api fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
+ classDef core fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+ classDef rag fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+ classDef ingest fill:#ffebee,stroke:#c62828,stroke-width:2px;
+ classDef ai fill:#e0f2f1,stroke:#00695c,stroke-width:2px;
+ classDef data fill:#eceff1,stroke:#455a64,stroke-width:2px;
+ classDef config fill:#fff3e0,stroke:#ef6c00,stroke-width:2px;
+
+ class Browser,HTML,CSS,JS ui;
+ class Server,RQuery,RStream,RDocs,RAudio,RSess,RRepos,RWebhooks api;
+ class Supervisor,Subagent,Prompts core;
+ class RAGPipeline,Retriever,Cache,Parser,Enricher rag;
+ class IngestPipeline,Fetcher,Walker,Chunker,Embedder,History ingest;
+ class WAuth,WEmbed,WGen,GGen,HGen,TTS ai;
+ class Chroma,ChromaData,Postgres,Migrate,Migrations,SessionMem,RepoStore,SessionStore,DocStore data;
+ class EnvConfig,WConfig,Crypto,Contracts config;`,
     caption: "Complete end-to-end component topology showing interconnected paths and communication protocols across TRACiE."
   },
 

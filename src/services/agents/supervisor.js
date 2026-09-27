@@ -1,4 +1,5 @@
 const { runSubagent } = require('./runSubagent');
+const { getRepositoryTreeForTarget } = require('../navigator/repositoryScanner');
 const {
   buildArchitectPrompt,
   buildCodeExplainerPrompt,
@@ -74,7 +75,7 @@ const AGENT_ROUTES = [
   {
     name: 'ArchitectSubagent',
     keywords: [
-      'diagram', 'architecture', 'flow', 'pipeline', 'component', 'topology',
+      'flowchart', 'flow chart', 'diagram', 'architecture', 'flow', 'pipeline', 'component', 'topology',
       'sequence', 'sequence diagram', 'uml', 'class diagram', 'er diagram',
       'schema', 'entity relationship', 'entities', 'dependencies', 'dependency graph',
       'how they are connected', 'connected', 'relationship', 'subsystems', 'module map'
@@ -96,7 +97,7 @@ const AGENT_ROUTES = [
   },
   {
     name: 'NavigatorSubagent',
-    keywords: ['tree', 'structure', 'folder', 'files', 'directory', 'layout'],
+    keywords: ['file tree', 'show tree', 'directory tree', 'directory structure', 'directory layout', 'folder structure', 'folder layout', 'show files', 'list files', 'repo layout', 'repo structure'],
     reason: 'Query requests repository file hierarchy and navigation',
     action: 'map_file_hierarchy',
     thought: 'Aggregating file paths and directory trees from retrieved repository chunks.',
@@ -114,13 +115,75 @@ const DEFAULT_AGENT = {
   buildPrompt: buildGeneralQAPrompt,
 };
 
+const WIDGET_OVERRIDE_MAP = {
+  quiz: 'QuizSubagent',
+  flashcard: 'FlashcardSubagent',
+  flashcards: 'FlashcardSubagent',
+  flashcard_deck: 'FlashcardSubagent',
+  audio: 'AudioSubagent',
+  'audio overview': 'AudioSubagent',
+  audio_overview: 'AudioSubagent',
+  audio_player: 'AudioSubagent',
+  audio_briefing: 'AudioSubagent',
+  code: 'CodeExplainerSubagent',
+  'code exercise': 'CodeExplainerSubagent',
+  code_exercise: 'CodeExplainerSubagent',
+  code_snippet: 'CodeExplainerSubagent',
+  flowchart: 'ArchitectSubagent',
+  'flow chart': 'ArchitectSubagent',
+  diagram: 'ArchitectSubagent',
+  architecture: 'ArchitectSubagent',
+  'architecture diagram': 'ArchitectSubagent',
+  architecture_diagram: 'ArchitectSubagent',
+  schema: 'ArchitectSubagent',
+  tutorial: 'TutorialSubagent',
+  'tutorial guide': 'TutorialSubagent',
+  tutorial_steps: 'TutorialSubagent',
+  curriculum: 'LearningPathSubagent',
+  learning_path: 'LearningPathSubagent',
+  tree: 'NavigatorSubagent',
+  'file tree': 'NavigatorSubagent',
+  file_tree: 'NavigatorSubagent',
+  directory_tree: 'NavigatorSubagent',
+  doc_proposal: 'DocWriterSubagent',
+  docs: 'DocWriterSubagent'
+};
+
 /**
- * Selects the first route whose keywords appear in the lower-cased query,
- * falling back to the default GeneralQA agent.
+ * Selects an agent route based on:
+ * 1. User explicit widget override (if requestedWidget is supplied)
+ * 2. Model automatic intent analysis via query keywords
+ * 3. Default GeneralQA agent fallback
  */
-function selectAgent(query) {
+function selectAgent(query, requestedWidget) {
+  if (requestedWidget && typeof requestedWidget === 'string') {
+    const key = requestedWidget.toLowerCase().trim().replace(/[-_]/g, ' ');
+    const targetName = WIDGET_OVERRIDE_MAP[key]
+      || WIDGET_OVERRIDE_MAP[key.replace(/\s+/g, '_')]
+      || WIDGET_OVERRIDE_MAP[key.split(' ')[0]];
+
+    if (targetName) {
+      const match = AGENT_ROUTES.find(r => r.name === targetName);
+      if (match) {
+        return {
+          ...match,
+          isOverride: true,
+          reason: `User explicitly selected widget representation: "${requestedWidget}"`
+        };
+      }
+    }
+  }
+
+  // Model selects the best way to represent the info
   const q = query.toLowerCase();
-  return AGENT_ROUTES.find(route => route.keywords.some(kw => q.includes(kw))) || DEFAULT_AGENT;
+  function matchesKeyword(text, keyword) {
+    if (keyword.includes(' ')) {
+      return text.includes(keyword);
+    }
+    const regex = new RegExp(`(^|[^a-zA-Z0-9])${keyword}([^a-zA-Z0-9]|$)`, 'i');
+    return regex.test(text);
+  }
+  return AGENT_ROUTES.find(route => route.keywords.some(kw => matchesKeyword(q, kw))) || DEFAULT_AGENT;
 }
 
 /**
@@ -132,6 +195,7 @@ function selectAgent(query) {
  * @param {Array<object>} params.chunks - Codebase context chunks.
  * @param {string} [params.conversationHistory] - Formatted prior conversation history.
  * @param {string} [params.externalContext] - External documentation context.
+ * @param {string} [params.requestedWidget] - User explicit widget override.
  * @param {Function} [params.onThought] - Callback for real-time agent thought streaming.
  * @returns {Promise<object>} Renderable widget payload with agent telemetry.
  */
@@ -140,6 +204,9 @@ async function orchestrateAgents({
   chunks,
   conversationHistory = '',
   externalContext = '',
+  requestedWidget,
+  repoId,
+  repoName,
   onThought
 }) {
   // 1. Supervisor initial reasoning
@@ -147,12 +214,12 @@ async function orchestrateAgents({
     onThought({
       agent: 'TRACiE-Supervisor (BeeAI)',
       action: 'intent_analysis',
-      thought: `Analyzing developer query: "${query}". Context: ${chunks.length} chunks${conversationHistory ? ', active session history' : ''}.`,
+      thought: `Analyzing developer query: "${query}". Context: ${chunks.length} chunks${requestedWidget ? ` | User widget override: [${requestedWidget}]` : ''}${conversationHistory ? ', active session history' : ''}${repoName ? ` | Repo: ${repoName}` : ''}.`,
     });
   }
 
-  // 2. Intent routing
-  const agent = selectAgent(query);
+  // 2. Intent routing (respects user override if specified, otherwise auto-selects)
+  const agent = selectAgent(query, requestedWidget);
 
   // 3. Emit handoff event
   if (onThought) {
@@ -160,11 +227,19 @@ async function orchestrateAgents({
       agent: 'TRACiE-Supervisor (BeeAI)',
       action: 'subagent_handoff',
       target: agent.name,
-      thought: `Routing decision: Delegating to [${agent.name}]. Reason: ${agent.reason}.`,
+      thought: agent.isOverride
+        ? `User override applied: Delegating to [${agent.name}]. ${agent.reason}.`
+        : `Routing decision: Delegating to [${agent.name}]. Reason: ${agent.reason}.`,
     });
   }
 
-  // 4. Execute subagent
+  // 4. Precompute repository tree if delegating to NavigatorSubagent
+  let repositoryTree = null;
+  if (agent.name === 'NavigatorSubagent') {
+    repositoryTree = await getRepositoryTreeForTarget({ repoId, repoName, query, chunks });
+  }
+
+  // 5. Execute subagent
   const widget = await runSubagent({
     agentName: agent.name,
     action: agent.action,
@@ -175,10 +250,14 @@ async function orchestrateAgents({
     chunks,
     conversationHistory,
     externalContext,
+    repoId,
+    repoName,
+    repositoryTree,
+    requestedWidget,
     onThought,
   });
 
-  // 5. Append agentic telemetry
+  // 6. Append agentic telemetry
   widget._agentChain = ['TRACiE-Supervisor', agent.name];
   widget._routingReason = agent.reason;
   widget._bobcoinsEstimated = widget._meta?.bobcoinsConsumed || 0.05;

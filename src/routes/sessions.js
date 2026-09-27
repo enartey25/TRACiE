@@ -26,9 +26,38 @@ const queryView = q => ({
   createdAt: q.created_at
 });
 
+/** GET /api/sessions -> { sessions: [Session + queryCount + title + lastQuery] } most recent first */
+router.get('/sessions', async (req, res) => {
+  try {
+    const sessions = await sessionStore.listAllSessions(50);
+    res.json({
+      sessions: sessions.map(s => ({
+        sessionId: s.id,
+        repositoryId: s.repository_id,
+        repoName: s.repo_name,
+        userAgent: s.user_agent,
+        startedAt: s.started_at,
+        lastActive: s.last_active,
+        queryCount: s.query_count || 0,
+        title: s.first_query || s.last_query || 'Chat Session',
+        lastQuery: s.last_query || null
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /** POST /api/sessions  { repositoryId } -> 201 Session */
 router.post('/sessions', async (req, res) => {
-  const { repositoryId } = req.body || {};
+  let { repositoryId } = req.body || {};
+  if (!repositoryId || !sessionStore.isUuid(repositoryId)) {
+    const repos = await repoStore.listRepositories();
+    if (repos && repos.length > 0) {
+      repositoryId = repos[0].id;
+    }
+  }
+
   if (!sessionStore.isUuid(repositoryId)) {
     return res.status(400).json({ error: 'Field "repositoryId" must be a repository UUID from /api/repos.' });
   }
@@ -38,6 +67,16 @@ router.post('/sessions', async (req, res) => {
     }
     const session = await sessionStore.createSession({ repositoryId, userAgent: req.get('User-Agent') });
     res.status(201).json(sessionView(session));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** DELETE /api/sessions/:id -> Delete session from database */
+router.delete('/sessions/:id', async (req, res) => {
+  try {
+    const success = await sessionStore.deleteSession(req.params.id);
+    res.json({ status: 'ok', deleted: success, sessionId: req.params.id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

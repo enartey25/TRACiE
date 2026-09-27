@@ -26,6 +26,10 @@ function toProposal(row) {
     pr_body: row.pr_body,
     affected_components: row.affected_components || [],
     review_note: row.review_note,
+    commit_status: row.commit_status || 'uncommitted',
+    commit_sha: row.commit_sha || null,
+    pr_url: row.pr_url || null,
+    error_message: row.error_message || null,
     created_at: row.generated_at,
     reviewed_at: row.reviewed_at
   };
@@ -62,6 +66,20 @@ async function getProposal(id) {
   return rows[0] ? toProposal(rows[0]) : null;
 }
 
+/**
+ * Returns true when there is already a 'pending' proposal for the given
+ * (repository, file) pair so the scanner can skip duplicate generation.
+ */
+async function hasPendingProposal(repositoryId, targetFile) {
+  const { rows } = await query(
+    `SELECT 1 FROM doc_proposals
+     WHERE repository_id = $1 AND target_file = $2 AND status = 'pending'
+     LIMIT 1`,
+    [repositoryId, targetFile]
+  );
+  return rows.length > 0;
+}
+
 async function listProposals(repositoryId, { status } = {}) {
   const params = [repositoryId];
   let where = 'repository_id = $1';
@@ -89,4 +107,25 @@ async function reviewProposal(id, status, note) {
   return { proposal: existing, conflict: `Proposal is already ${existing.status}.` };
 }
 
-module.exports = { STATUSES, createProposal, getProposal, listProposals, reviewProposal };
+/**
+ * Updates commit execution status on a proposal.
+ */
+async function updateProposalCommit(id, { commitStatus, commitSha, prUrl, errorMessage }) {
+  const fields = [];
+  const params = [id];
+  let i = 2;
+  if (commitStatus !== undefined) { fields.push(`commit_status = $${i++}`); params.push(commitStatus); }
+  if (commitSha !== undefined) { fields.push(`commit_sha = $${i++}`); params.push(commitSha); }
+  if (prUrl !== undefined) { fields.push(`pr_url = $${i++}`); params.push(prUrl); }
+  if (errorMessage !== undefined) { fields.push(`error_message = $${i++}`); params.push(errorMessage); }
+
+  if (fields.length === 0) return await getProposal(id);
+
+  const { rows } = await query(
+    `UPDATE doc_proposals SET ${fields.join(', ')} WHERE id = $1 RETURNING *`,
+    params
+  );
+  return rows[0] ? toProposal(rows[0]) : null;
+}
+
+module.exports = { STATUSES, createProposal, getProposal, listProposals, hasPendingProposal, reviewProposal, updateProposalCommit };

@@ -30,9 +30,11 @@
   "dependencies": {
     "axios": "^1.20.0",
     "chromadb": "^3.5.0",
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
+    "express-session": "^1.19.0",
     "groq-sdk": "^1.6.0",
     "pg": "^8.23.0",
     "simple-git": "^4.0.1",

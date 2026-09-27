@@ -60,19 +60,48 @@ router.get('/doc-proposals/:id', async (req, res) => {
   }
 });
 
-/** POST /api/doc-proposals/:id/approve | /reject   body (optional): { note } -> proposal; 409 if not pending */
-for (const [action, status] of [['approve', 'approved'], ['reject', 'rejected']]) {
-  router.post(`/doc-proposals/:id/${action}`, async (req, res) => {
-    if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid proposal id.' });
-    try {
-      const { proposal, conflict } = await proposals.reviewProposal(req.params.id, status, req.body && req.body.note);
-      if (!proposal) return res.status(404).json({ error: 'Proposal not found.' });
-      if (conflict) return res.status(409).json({ error: conflict, proposal });
-      res.json(proposal);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-}
+const { executeProposalCommit } = require('../services/docs/gitCommitEngine');
+
+/** POST /api/doc-proposals/:id/approve  body (optional): { note, token } -> approved proposal with commit details */
+router.post('/doc-proposals/:id/approve', async (req, res) => {
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid proposal id.' });
+  try {
+    const { proposal, conflict } = await proposals.reviewProposal(req.params.id, 'approved', req.body && req.body.note);
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found.' });
+    if (conflict) return res.status(409).json({ error: conflict, proposal });
+
+    // Token resolution priority: OAuth session → explicit body.token → repo/env fallback
+    const sessionToken = req.session && req.session.github && req.session.github.accessToken;
+
+    // Execute git commit and push / PR creation
+    const commitResult = await executeProposalCommit({
+      proposalId: req.params.id,
+      token: sessionToken || req.body?.token
+    });
+
+    const refreshed = await proposals.getProposal(req.params.id);
+    res.json({
+      status: 'success',
+      message: commitResult.success ? `Proposal approved and ${commitResult.commitStatus}` : 'Proposal approved (commit skipped or failed)',
+      proposal: refreshed || proposal,
+      commitResult
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** POST /api/doc-proposals/:id/reject  body (optional): { note } */
+router.post('/doc-proposals/:id/reject', async (req, res) => {
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid proposal id.' });
+  try {
+    const { proposal, conflict } = await proposals.reviewProposal(req.params.id, 'rejected', req.body && req.body.note);
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found.' });
+    if (conflict) return res.status(409).json({ error: conflict, proposal });
+    res.json(proposal);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports = router;

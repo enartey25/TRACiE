@@ -23,18 +23,24 @@ function recordTurn(sessionId, { query, widget }) {
 
   const history = sessionStore.get(sessionId);
 
-  // Extract concise summary of widget to prevent prompt bloat
+  // Extract informative summary of widget for rich multi-turn context
   let summary = '';
   if (widget.type === 'chat_response') {
-    summary = widget.content?.substring(0, 300) || '';
+    summary = widget.content?.substring(0, 1500) || widget.answer?.substring(0, 1500) || '';
+  } else if (widget.type === 'audio_player') {
+    summary = `Audio briefing on "${widget.title || ''}": ${widget.transcript?.substring(0, 1000) || widget.description || ''}`;
   } else if (widget.type === 'code_snippet') {
-    summary = `Code snippet in ${widget.file_path}: ${widget.explanation || ''}`;
+    summary = `Code snippet in ${widget.file_path}: ${widget.explanation || ''} | Code: ${(widget.code || '').substring(0, 500)}`;
   } else if (widget.type === 'architecture_diagram') {
-    summary = `Architecture diagram: ${widget.title || ''} (${widget.caption || ''})`;
+    summary = `Architecture diagram: ${widget.title || ''} (${widget.caption || widget.description || ''})`;
   } else if (widget.type === 'quiz') {
-    summary = `Quiz question: ${widget.question}`;
+    summary = `Quiz question: ${widget.question} (Explanation: ${widget.explanation || ''})`;
+  } else if (widget.type === 'flashcard_deck') {
+    summary = `Flashcard deck: ${widget.title || ''} (${(widget.cards || []).length} cards)`;
+  } else if (widget.type === 'doc_proposal') {
+    summary = `Documentation proposal for ${widget.target_file || 'docs'}: ${widget.rationale || widget.summary || ''}`;
   } else {
-    summary = `Rendered widget [${widget.type}]: ${widget.title || ''}`;
+    summary = `Rendered widget [${widget.type}]: ${widget.title || widget.message || ''}`;
   }
 
   history.push({

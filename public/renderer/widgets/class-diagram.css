@@ -1,0 +1,134 @@
+/* class-diagram.css — styles for the class_diagram widget */
+
+/* ── layout ── */
+.uir-class-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── grid of class boxes ── */
+.uir-class-diagram__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.875rem;
+}
+
+@media (max-width: 640px) {
+  .uir-class-diagram__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+  .uir-class-diagram__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── individual class box ── */
+.uir-class-diagram__box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--uir-line-strong);
+  border-radius: var(--uir-radius-sm);
+  overflow: hidden;
+}
+
+/* ── header bar ── */
+.uir-class-diagram__header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 0.75rem;
+  background: var(--uir-slate);
+  gap: 0.15rem;
+  min-height: 2.75rem;
+  text-align: center;
+}
+
+.uir-class-diagram__header--dark {
+  background: var(--uir-slate);
+}
+
+.uir-class-diagram__header--green {
+  background: var(--uir-teal);
+}
+
+.uir-class-diagram__header--grey {
+  background: var(--uir-muted);
+}
+
+.uir-class-diagram__stereotype {
+  font-family: var(--uir-sans);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.2;
+  font-style: italic;
+}
+
+.uir-class-diagram__name {
+  font-family: var(--uir-sans);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+/* ── attribute and method sections ── */
+.uir-class-diagram__section {
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.uir-class-diagram__section--attrs {
+  background: var(--uir-sand);
+  border-top: 1px solid var(--uir-line-strong);
+}
+
+.uir-class-diagram__section--methods {
+  background: var(--uir-card, #ffffff);
+  border-top: 1px solid var(--uir-line-strong);
+  flex: 1;
+}
+
+.uir-class-diagram__member {
+  font-family: var(--uir-mono);
+  font-size: 0.75rem;
+  color: var(--uir-text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.uir-class-diagram__empty-section {
+  font-family: var(--uir-sans);
+  font-size: 0.75rem;
+  color: var(--uir-soft-text);
+}
+
+/* ── relations list ── */
+.uir-class-diagram__relations {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.25rem;
+}
+
+.uir-class-diagram__relation {
+  font-family: var(--uir-mono);
+  font-size: 0.8rem;
+  color: var(--uir-soft-text);
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uir-class-diagram__box {
+    transition: none;
+  }
+}

@@ -23,6 +23,8 @@ function generateMockEmbedding(text, dimensions = 768) {
   return vector.map(v => v / norm);
 }
 
+const { getCachedEmbedding, setCachedEmbedding } = require('../rag/ragCache');
+
 /**
  * Generates a vector embedding for a single text string using IBM watsonx.ai.
  * @param {string} text - The input text to embed.
@@ -34,8 +36,14 @@ async function generateEmbedding(text, options = {}) {
     throw new Error('Input text must be a non-empty string.');
   }
 
+  // Fast-path cache lookup
+  const cached = getCachedEmbedding(text);
+  if (cached) return cached;
+
   if (!hasValidCredentials()) {
-    return generateMockEmbedding(text);
+    const mock = generateMockEmbedding(text);
+    setCachedEmbedding(text, mock);
+    return mock;
   }
 
   const headers = await getAuthHeaders();
@@ -49,7 +57,8 @@ async function generateEmbedding(text, options = {}) {
       {
         inputs: [text],
         model_id: modelId,
-        project_id: projectId
+        project_id: projectId,
+        parameters: { truncate_input_tokens: 512 }
       },
       { headers, timeout: 15000 }
     );
@@ -102,7 +111,8 @@ async function generateEmbeddings(texts, options = {}) {
         {
           inputs: batch,
           model_id: modelId,
-          project_id: projectId
+          project_id: projectId,
+          parameters: { truncate_input_tokens: 512 }
         },
         { headers, timeout: 30000 }
       );
