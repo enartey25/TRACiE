@@ -1,0 +1,74 @@
+/* ── FAQ widget ─────────────────────────────────────────────────────── */
+
+.uir-faq__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.uir-faq__item {
+  background: var(--uir-sage-tint);
+  border-radius: var(--uir-radius-sm);
+  padding: 14px 16px;
+  list-style: none;
+}
+
+/* Remove default disclosure triangle in all browsers */
+.uir-faq__item summary::-webkit-details-marker {
+  display: none;
+}
+
+.uir-faq__item summary::marker {
+  display: none;
+}
+
+.uir-faq__question {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--uir-text);
+  user-select: none;
+  font-family: var(--uir-sans);
+}
+
+.uir-faq__question:focus-visible {
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.uir-faq__question svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--uir-teal);
+  margin-top: 2px;
+}
+
+.uir-faq__question-text {
+  font-weight: 600;
+}
+
+.uir-faq__answer {
+  margin: 8px 0 0 24px;
+  color: var(--uir-muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  font-family: var(--uir-sans);
+}
+
+.uir-faq__empty {
+  color: var(--uir-muted);
+  font-family: var(--uir-sans);
+  font-size: 0.92rem;
+}
+
+/* Respect reduced motion (no animations are defined, but guard future additions) */
+@media (prefers-reduced-motion: reduce) {
+  .uir-faq__item,
+  .uir-faq__question {
+    transition: none;
+  }
+}

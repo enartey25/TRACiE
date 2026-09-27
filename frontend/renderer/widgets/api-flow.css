@@ -1,0 +1,178 @@
+/* api-flow.css — styles for the api_flow widget */
+
+/* ── Legend ──────────────────────────────────────────────────────────────── */
+.uir-api-flow__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Group grid ──────────────────────────────────────────────────────────── */
+.uir-api-flow__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  align-items: flex-start;
+}
+
+/* ── Group card ──────────────────────────────────────────────────────────── */
+.uir-api-flow__group {
+  flex: 1 1 200px;
+  min-width: 0;
+  border: 1px solid var(--uir-line-strong);
+  border-radius: var(--uir-radius-sm);
+  overflow: hidden;
+}
+
+/* ── Group header ────────────────────────────────────────────────────────── */
+.uir-api-flow__group-header {
+  padding: 0.5rem 0.875rem;
+  font-family: var(--uir-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.uir-api-flow__group-header--dark {
+  background: var(--uir-slate);
+  color: #ffffff;
+}
+
+.uir-api-flow__group-header--green {
+  background: var(--uir-teal);
+  color: #ffffff;
+}
+
+.uir-api-flow__group-header--light {
+  background: var(--uir-sage);
+  color: var(--uir-text);
+}
+
+/* ── Endpoint row ────────────────────────────────────────────────────────── */
+.uir-api-flow__row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border-top: 1px solid var(--uir-line);
+  background: var(--uir-card);
+}
+
+.uir-api-flow__row:first-of-type {
+  border-top: none;
+}
+
+/* ── Method pill ─────────────────────────────────────────────────────────── */
+.uir-api-flow__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--uir-radius);
+  font-family: var(--uir-sans);
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.uir-api-flow__pill--sm {
+  font-size: 0.6875rem;
+  padding: 0.15rem 0.5rem;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+}
+
+.uir-api-flow__pill--get {
+  background: var(--uir-sage-tint);
+  color: var(--uir-text);
+}
+
+.uir-api-flow__pill--post {
+  background: var(--uir-teal);
+  color: #ffffff;
+}
+
+.uir-api-flow__pill--patch {
+  background: var(--uir-sage);
+  color: var(--uir-text);
+}
+
+.uir-api-flow__pill--delete {
+  background: var(--uir-slate);
+  color: #ffffff;
+}
+
+/* ── Path ────────────────────────────────────────────────────────────────── */
+.uir-api-flow__path {
+  font-family: var(--uir-mono);
+  font-size: 0.8125rem;
+  color: var(--uir-text);
+  word-break: break-all;
+}
+
+/* ── Result ──────────────────────────────────────────────────────────────── */
+.uir-api-flow__result {
+  font-family: var(--uir-sans);
+  font-size: 0.75rem;
+  color: var(--uir-soft-text);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.uir-api-flow__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--uir-line);
+}
+
+.uir-api-flow__footer-label {
+  font-family: var(--uir-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--uir-soft-text);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-right: 0.125rem;
+}
+
+.uir-api-flow__error-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--uir-warm-chip);
+  border: 1px solid var(--uir-line);
+  border-radius: var(--uir-radius);
+  font-family: var(--uir-sans);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--uir-muted);
+  padding: 0.1rem 0.55rem;
+  white-space: nowrap;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .uir-api-flow__group,
+  .uir-api-flow__row {
+    transition: none;
+  }
+}
+
+/* ── Responsive collapse ─────────────────────────────────────────────────── */
+@media (max-width: 540px) {
+  .uir-api-flow__grid {
+    flex-direction: column;
+  }
+  .uir-api-flow__group {
+    flex: 1 1 100%;
+  }
+  .uir-api-flow__result {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,364 @@
+/*
+ * audio.css  –  UIRenderer audio widget styles
+ * Design: docs/renderer/design/flashcards-audio.png (right half)
+ * Only --uir-* tokens. BEM: .uir-audio__<part>, .uir-audio--<state>
+ */
+
+/* ── root card (bare: true — draws its own shell) ── */
+.uir-audio {
+  position: relative;
+  background: var(--uir-card);
+  border: 1px solid var(--uir-line);
+  border-radius: var(--uir-radius);
+  box-shadow: var(--uir-shadow);
+  padding: 1.25rem;
+  font-family: var(--uir-sans);
+  color: var(--uir-text);
+  margin: 0 0 16px;
+  animation: uir-in .28s ease-out both;
+}
+
+/* ── header row: title + download ── */
+.uir-audio__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.uir-audio__title {
+  font-family: var(--uir-sans);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1.25;
+  color: var(--uir-text);
+  margin: 0;
+  flex: 1;
+}
+
+/* ── download button: dark circle, top-right ── */
+.uir-audio__download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--uir-slate);
+  color: var(--uir-card);
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.uir-audio__download:hover {
+  opacity: 0.82;
+}
+
+.uir-audio__download:focus-visible {
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+}
+
+.uir-audio__download .uir-audio__icon,
+.uir-audio__download svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* ── description ── */
+.uir-audio__desc {
+  font-size: 0.875rem;
+  color: var(--uir-teal);
+  margin: 0 0 1rem;
+  line-height: 1.45;
+}
+
+/* ── player row: left column + play/pause pill ── */
+.uir-audio__player {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.uir-audio__player-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* ── time row ── */
+.uir-audio__time-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.8rem;
+  margin-bottom: 0.3rem;
+}
+
+.uir-audio__current {
+  font-weight: 700;
+  color: var(--uir-text);
+}
+
+.uir-audio__duration {
+  color: var(--uir-muted);
+}
+
+/* ── progress bar: track + fill + range overlay ── */
+.uir-audio__progress {
+  position: relative;
+  height: 20px; /* touch target height */
+  display: flex;
+  align-items: center;
+}
+
+.uir-audio__progress-track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: var(--uir-sage-soft);
+  border-radius: var(--uir-radius);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.uir-audio__progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: var(--uir-slate);
+  border-radius: var(--uir-radius);
+  pointer-events: none;
+  transition: width 0.1s linear;
+}
+
+/* range input overlaid full-width, transparent, for pointer events */
+.uir-audio__seek {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+}
+
+.uir-audio__seek:disabled {
+  cursor: default;
+  pointer-events: none;
+}
+
+.uir-audio__seek:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+  border-radius: var(--uir-radius);
+}
+
+/* skeleton shimmer (loading state) */
+.uir-audio__skeleton {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--uir-sage-soft) 0%,
+    var(--uir-sage-tint) 50%,
+    var(--uir-sage-soft) 100%
+  );
+  background-size: 200% 100%;
+  animation: uir-audio-shimmer 1.4s infinite;
+  border-radius: var(--uir-radius);
+  display: none;
+}
+
+.uir-audio--loading .uir-audio__skeleton {
+  display: block;
+}
+
+.uir-audio--loading .uir-audio__progress-fill {
+  display: none;
+}
+
+@keyframes uir-audio-shimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+/* ── play/pause pill (right column of player row) ── */
+.uir-audio__playpause {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 1.1rem;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--uir-slate);
+  color: var(--uir-card);
+  border: none;
+  font-family: var(--uir-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+  transition: opacity 0.15s;
+}
+
+.uir-audio__playpause:hover {
+  opacity: 0.82;
+}
+
+.uir-audio__playpause:focus-visible {
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+}
+
+.uir-audio__playpause .uir-audio__icon {
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* ── bottom controls row ── */
+.uir-audio__controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* outline pills: skip & speed */
+.uir-audio__skip,
+.uir-audio__speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.85rem;
+  height: 34px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--uir-line);
+  color: var(--uir-text);
+  font-family: var(--uir-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.uir-audio__skip:hover,
+.uir-audio__speed:hover {
+  background: var(--uir-sage-tint);
+}
+
+.uir-audio__skip:focus-visible,
+.uir-audio__speed:focus-visible {
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+}
+
+.uir-audio__skip:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.uir-audio__skip .uir-audio__icon {
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* ── transcript <details> ── */
+.uir-audio__transcript {
+  border-top: 1px solid var(--uir-line);
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.uir-audio__transcript summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--uir-teal);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  user-select: none;
+}
+
+.uir-audio__transcript summary::-webkit-details-marker {
+  display: none;
+}
+
+.uir-audio__transcript summary::after {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.uir-audio__transcript[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.uir-audio__transcript summary:focus-visible {
+  outline: 2px solid var(--uir-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.uir-audio__transcript-body {
+  margin: 0.6rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--uir-muted);
+}
+
+/* ── icon span helper ── */
+.uir-audio__icon {
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* ── reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .uir-audio__skeleton {
+    animation: none;
+  }
+  .uir-audio__progress-fill {
+    transition: none;
+  }
+  .uir-audio__playpause,
+  .uir-audio__download,
+  .uir-audio__skip,
+  .uir-audio__speed {
+    transition: none;
+  }
+  .uir-audio__transcript summary::after {
+    transition: none;
+  }
+}
