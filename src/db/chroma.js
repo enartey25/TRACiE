@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { ChromaClient, CloudClient } = require('chromadb');
 const config = require('../config/backend');
 
@@ -36,12 +37,30 @@ function getClient() {
   return client;
 }
 
-/** Get (or lazily create) the code_chunks collection. We always supply our own embeddings. */
+/**
+ * Collection name for the active embedding model, e.g. "code_chunks__huggingface-sentence-transformers-all-minilm-l6-v2".
+ *
+ * A Chroma collection locks its vector dimension on first insert. The team shares one
+ * Chroma database but not always one embedding model (watsonx granite = 768 dims,
+ * HF MiniLM = 384), so a single shared "code_chunks" collection rejected every upsert
+ * from whichever environment disagreed ("expecting embedding with dimension of 768, got 384")
+ * and silently returned nothing on query. One collection per model keeps them apart.
+ */
+function collectionName() {
+  const { getEmbeddingModelKey } = require('../services/watsonx/embedding');
+  const key = getEmbeddingModelKey();
+  if (!key) return config.chromaCollection;
+  const slug = key.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // Chroma names: 3-512 chars of [a-zA-Z0-9._-], starting and ending alphanumeric.
+  return `${config.chromaCollection}__${slug}`.slice(0, 200).replace(/[^a-z0-9]+$/i, '');
+}
+
+/** Get (or lazily create) the chunk collection for the active embedding model. We always supply our own embeddings. */
 function getCollection() {
   if (!collectionPromise) {
     collectionPromise = getClient()
       .getOrCreateCollection({
-        name: config.chromaCollection,
+        name: collectionName(),
         embeddingFunction: null,
         configuration: { hnsw: { space: 'cosine' } }
       })
@@ -60,10 +79,22 @@ async function ping() {
     await getClient().heartbeat();
     const collection = await getCollection();
     const chunkCount = await collection.count();
-    return { ok: true, mode: config.chromaApiKey ? 'cloud' : 'local', latencyMs: Date.now() - started, chunkCount };
+    return { ok: true, mode: config.chromaApiKey ? 'cloud' : 'local', collection: collection.name, latencyMs: Date.now() - started, chunkCount };
   } catch (error) {
     return { ok: false, error: error.message };
   }
+}
+
+/**
+ * Chroma Cloud rejects record ids over 128 bytes, and chunk ids embed the file path
+ * ({repositoryId}_{filePath}_{startLine}), so deep paths used to fail the whole job.
+ * Long ids are shortened deterministically (repository prefix + hash), so re-indexing
+ * still overwrites the same record. The full id stays in metadata.chunk_id.
+ */
+const MAX_ID_BYTES = 128;
+function storedId(chunkId) {
+  if (Buffer.byteLength(chunkId, 'utf8') <= MAX_ID_BYTES) return chunkId;
+  return `${chunkId.slice(0, 36)}_h${crypto.createHash('sha256').update(chunkId).digest('hex').slice(0, 48)}`;
 }
 
 /**
@@ -73,11 +104,20 @@ async function ping() {
  *   chunkType: 'code' (default) | 'commit' | 'pull_request'
  *   extra: additional flat metadata (string/number/boolean values only), e.g. commit_sha, pr_number
  */
+// Chroma Cloud's free tier rejects upserts of more than 300 records per request.
+const UPSERT_BATCH = 250;
+
 async function upsertChunks(chunks) {
   if (!chunks.length) return;
   const collection = await getCollection();
+  for (let i = 0; i < chunks.length; i += UPSERT_BATCH) {
+    await upsertBatch(collection, chunks.slice(i, i + UPSERT_BATCH));
+  }
+}
+
+async function upsertBatch(collection, chunks) {
   await collection.upsert({
-    ids: chunks.map(c => c.chunkId),
+    ids: chunks.map(c => storedId(c.chunkId)),
     embeddings: chunks.map(c => c.embedding),
     documents: chunks.map(c => c.text),
     metadatas: chunks.map(c => ({
@@ -94,6 +134,13 @@ async function upsertChunks(chunks) {
       symbols: c.symbols || ''
     }))
   });
+}
+
+/** True when the active collection holds at least one chunk for the repository. */
+async function hasRepositoryChunks(repositoryId) {
+  const collection = await getCollection();
+  const result = await collection.get({ where: { repository_id: repositoryId }, limit: 1, include: [] });
+  return result.ids.length > 0;
 }
 
 /** Remove every chunk belonging to a repository (used before a full re-index). */
@@ -123,8 +170,10 @@ async function getExisting(ids) {
   const collection = await getCollection();
   const found = new Map();
   for (let i = 0; i < ids.length; i += 200) {
-    const result = await collection.get({ ids: ids.slice(i, i + 200), include: ['metadatas'] });
-    result.ids.forEach((id, j) => found.set(id, result.metadatas[j] || {}));
+    const batch = ids.slice(i, i + 200);
+    const original = new Map(batch.map(id => [storedId(id), id]));
+    const result = await collection.get({ ids: [...original.keys()], include: ['metadatas'] });
+    result.ids.forEach((id, j) => found.set(original.get(id) || id, result.metadatas[j] || {}));
   }
   return found;
 }
@@ -155,7 +204,7 @@ async function queryChunks({ embedding, repositoryId, chunkTypes, topK = 5 }) {
   return ids.map((id, i) => {
     const metadata = (result.metadatas[0] || [])[i] || {};
     return {
-      chunk_id: id,
+      chunk_id: metadata.chunk_id || id,
       chunk_type: metadata.chunk_type || 'code',
       content: (result.documents[0] || [])[i] || '',
       file_path: metadata.file_path,
@@ -189,7 +238,7 @@ async function getRepositoryChunks({ repositoryId, chunkTypes, limit = 15 }) {
   return ids.map((id, i) => {
     const metadata = (result.metadatas || [])[i] || {};
     return {
-      chunk_id: id,
+      chunk_id: metadata.chunk_id || id,
       chunk_type: metadata.chunk_type || 'code',
       content: (result.documents || [])[i] || '',
       file_path: metadata.file_path,
@@ -221,7 +270,7 @@ async function getChunksByFilePath({ repositoryId, filePaths, limit = 20 }) {
   return ids.map((id, i) => {
     const metadata = (result.metadatas || [])[i] || {};
     return {
-      chunk_id: id,
+      chunk_id: metadata.chunk_id || id,
       chunk_type: metadata.chunk_type || 'code',
       content: (result.documents || [])[i] || '',
       file_path: metadata.file_path,
@@ -236,6 +285,6 @@ async function getChunksByFilePath({ repositoryId, filePaths, limit = 20 }) {
 }
 
 module.exports = {
-  getClient, getCollection, ping, upsertChunks, deleteRepositoryChunks, deleteFileChunks, deleteWhere,
+  getClient, getCollection, collectionName, ping, upsertChunks, hasRepositoryChunks, deleteRepositoryChunks, deleteFileChunks, deleteWhere,
   getExisting, queryChunks, getRepositoryChunks, getChunksByFilePath
 };

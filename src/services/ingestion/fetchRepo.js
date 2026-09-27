@@ -63,10 +63,18 @@ async function cloneRepository({ url, token, jobId }) {
     GIT_TERMINAL_PROMPT: '0',
     GIT_LFS_SKIP_SMUDGE: '1'
   });
+  const cloneArgs = ['--depth', '1', '--single-branch', '--no-tags'];
   try {
-    await git.clone(remote, dir, ['--depth', '1', '--single-branch', '--no-tags']);
+    await git.clone(remote, dir, cloneArgs);
   } catch (error) {
-    throw new Error(`git clone failed: ${redact(error.message, authToken)}`);
+    if (!authToken) throw new Error(`git clone failed: ${redact(error.message, authToken)}`);
+    // A stored token can expire or be revoked; public repositories still clone anonymously.
+    fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      await git.clone(`${parsed.url}.git`, dir, cloneArgs);
+    } catch (_) {
+      throw new Error(`git clone failed: ${redact(error.message, authToken)}`);
+    }
   }
 
   let commitSha = null;

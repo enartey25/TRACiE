@@ -1,6 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const userStore = require('../services/users/userStore');
+
+/** Plain status page for OAuth failures, styled like the app (light theme, sage accents). */
+function authPage(title, message) {
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRACiE sign-in</title></head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f5f2;color:#30404a;font-family:Inter,system-ui,sans-serif">
+  <main style="max-width:420px;margin:16px;padding:28px;background:#fff;border:1px solid #e0e7e4;border-radius:14px">
+    <h1 style="margin:0 0 8px;font-size:18px;font-weight:600">${esc(title)}</h1>
+    <p style="margin:0 0 20px;color:#6b7d8a;font-size:14px;line-height:1.5">${esc(message)}</p>
+    <a href="/" style="display:inline-block;padding:8px 16px;background:#2d6a4f;color:#fff;border-radius:7px;text-decoration:none;font-size:13px;font-weight:500">Back to TRACiE</a>
+  </main>
+</body></html>`;
+}
 
 const GITHUB_CLIENT_ID     = process.env.GITHUB_CLIENT_ID     || '';
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || '';
@@ -20,7 +35,9 @@ router.get('/auth/github', (req, res) => {
   }
 
   // Persist where to redirect after login (defaults to '/')
-  req.session.returnTo = req.query.return_to || '/';
+  // Only same-site paths, so the login flow can't be used as an open redirect.
+  const returnTo = String(req.query.return_to || '/');
+  req.session.returnTo = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/';
 
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
@@ -44,21 +61,11 @@ router.get('/auth/github/callback', async (req, res) => {
 
   // Validate CSRF state
   if (!state || state !== req.session.id) {
-    return res.status(400).send(`
-      <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
-        <h2>⚠️ Invalid OAuth state</h2>
-        <p>CSRF check failed. Please <a href="/" style="color:#38bdf8">go back and try again</a>.</p>
-      </body></html>
-    `);
+    return res.status(400).send(authPage('Sign-in expired', 'The sign-in link was already used or has expired. Go back and try again.'));
   }
 
   if (!code) {
-    return res.status(400).send(`
-      <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
-        <h2>⚠️ No authorization code</h2>
-        <p>GitHub did not return an authorization code. <a href="/" style="color:#38bdf8">Return home</a>.</p>
-      </body></html>
-    `);
+    return res.status(400).send(authPage('Sign-in cancelled', 'GitHub did not return an authorization code.'));
   }
 
   try {
@@ -90,6 +97,8 @@ router.get('/auth/github/callback', async (req, res) => {
     });
 
     const ghUser = userRes.data;
+    const account = await userStore.upsertGithubUser(ghUser);
+    req.session.userId = account.id;
 
     // Store in session
     req.session.github = {
@@ -113,13 +122,7 @@ router.get('/auth/github/callback', async (req, res) => {
     });
   } catch (err) {
     console.error('[auth/github] OAuth callback failed:', err.message);
-    res.status(500).send(`
-      <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
-        <h2>❌ GitHub Login Failed</h2>
-        <p>${err.message}</p>
-        <a href="/" style="color:#38bdf8">Return to TRACiE</a>
-      </body></html>
-    `);
+    res.status(500).send(authPage('GitHub sign-in failed', err.message));
   }
 });
 
@@ -133,6 +136,7 @@ router.get('/auth/me', (req, res) => {
   if (gh && gh.accessToken) {
     res.json({
       authenticated: true,
+      userId: req.session.userId || null,
       login: gh.login,
       name: gh.name,
       avatarUrl: gh.avatarUrl,

@@ -18,8 +18,55 @@ const state = {
   canvasOpen: true,
   turns: [],
   activeTurnIndex: null,
+  user: null,
+  sessions: [],
+  prefs: { showAgentActivity: true, autoOpenCanvas: true },
 };
 window.state = state;
+
+// ---- API access -------------------------------------------------
+// Every /api call needs a signed-in GitHub user. A 401 means the session ended,
+// so bring back the sign-in screen instead of failing silently.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async function(input, init) {
+  const res = await nativeFetch(input, Object.assign({ credentials: 'same-origin' }, init));
+  const url = typeof input === 'string' ? input : ((input && input.url) || '');
+  if (res.status === 401 && url.indexOf('/api/') === 0) showSignInGate();
+  return res;
+};
+
+/** Reads an error message out of a failed JSON response. */
+async function responseError(res, fallback) {
+  try {
+    const data = await res.json();
+    return data.message || data.error || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+// ---- Toasts -----------------------------------------------------
+const toastRegion = document.getElementById('toastRegion');
+function showToast(message, type) {
+  if (!toastRegion) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + (type || 'info');
+  toast.innerHTML = '<span></span><button aria-label="Dismiss">&#x2715;</button>';
+  toast.querySelector('span').textContent = message;
+  const dismiss = () => toast.remove();
+  toast.querySelector('button').addEventListener('click', dismiss);
+  toastRegion.appendChild(toast);
+  setTimeout(dismiss, type === 'error' ? 8000 : 5000);
+}
+
+// ---- Sign-in gate -----------------------------------------------
+const signinGate = document.getElementById('signinGate');
+function showSignInGate() {
+  if (signinGate) signinGate.style.display = 'flex';
+}
+function hideSignInGate() {
+  if (signinGate) signinGate.style.display = 'none';
+}
 
 const shell          = document.getElementById('tracyShell');
 const collapseBtn    = document.getElementById('collapseBtn');
@@ -57,11 +104,46 @@ const closeSearch    = document.getElementById('closeSearch');
 const pendingList    = document.getElementById('pendingList');
 
 // ---- Sidebar collapse -------------------------------------------
+// Desktop: the sidebar collapses to an icon rail; the same button (and the topbar
+// toggle) expands it again. Phones: the sidebar is a drawer opened from the topbar.
+const sidebarToggle = document.getElementById('sidebarToggle');
+const isPhone = () => window.matchMedia('(max-width: 700px)').matches;
+
+function setSidebarCollapsed(collapsed) {
+  state.collapsed = collapsed;
+  shell.classList.toggle('sidebar-collapsed', collapsed);
+  const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  collapseBtn.setAttribute('aria-label', label);
+  collapseBtn.setAttribute('aria-expanded', String(!collapsed));
+  collapseBtn.title = label;
+  try { localStorage.setItem('tracie_sidebar_collapsed', collapsed ? '1' : '0'); } catch (_) {}
+}
+
+function setSidebarOpen(open) {
+  shell.classList.toggle('sidebar-open', open);
+}
+
 collapseBtn.addEventListener('click', () => {
-  state.collapsed = !state.collapsed;
-  shell.classList.toggle('sidebar-collapsed', state.collapsed);
-  collapseBtn.textContent = state.collapsed ? '\u203A' : '\u2039';
+  if (isPhone()) setSidebarOpen(false);
+  else setSidebarCollapsed(!state.collapsed);
 });
+
+if (sidebarToggle) {
+  sidebarToggle.addEventListener('click', () => {
+    if (isPhone()) setSidebarOpen(!shell.classList.contains('sidebar-open'));
+    else setSidebarCollapsed(false);
+  });
+}
+
+// Tapping the dimmed backdrop (the shell itself, outside the drawer) closes the drawer.
+shell.addEventListener('click', (e) => {
+  if (e.target === shell && shell.classList.contains('sidebar-open')) setSidebarOpen(false);
+});
+
+// A collapsed rail still has its nav icons; clicking one should work, not just expand.
+try {
+  if (localStorage.getItem('tracie_sidebar_collapsed') === '1' && !isPhone()) setSidebarCollapsed(true);
+} catch (_) {}
 
 // ---- Nav: New Chat -----------------------------------------------
 navNewChat.addEventListener('click', newChat);
@@ -82,21 +164,104 @@ function newChat() {
   modeChat.classList.add('active');
   modePending.classList.remove('active');
   document.querySelectorAll('.history-item').forEach(b => b.classList.remove('selected'));
+  setSidebarOpen(false);
+  queryInput.focus();
 }
 
 // ---- Nav: Search ------------------------------------------------
-navSearch.addEventListener('click', () => {
+// Searches the signed-in user's chats by title, last question and repository.
+const searchResults = document.getElementById('searchResults');
+let searchHighlight = -1;
+
+function openSearch() {
   searchOverlay.style.display = 'flex';
+  searchInput.value = '';
+  setSidebarOpen(false);
+  renderSearchResults();
   setTimeout(() => searchInput.focus(), 50);
-  setNavActive(null);
-});
-closeSearch.addEventListener('click', () => { searchOverlay.style.display = 'none'; });
+  // Refresh in the background so results include chats from other tabs.
+  loadSidebarHistory().then(renderSearchResults);
+}
+
+function closeSearchOverlay() {
+  searchOverlay.style.display = 'none';
+}
+
+function highlightMatch(text, q) {
+  const safe = escapeHtml(text);
+  if (!q) return safe;
+  const i = text.toLowerCase().indexOf(q);
+  if (i < 0) return safe;
+  return escapeHtml(text.slice(0, i)) + '<mark>' + escapeHtml(text.slice(i, i + q.length)) + '</mark>' + escapeHtml(text.slice(i + q.length));
+}
+
+function renderSearchResults() {
+  if (!searchResults) return;
+  const q = searchInput.value.trim().toLowerCase();
+  const matches = state.sessions.filter(s => {
+    if (!q) return true;
+    return [s.title, s.lastQuery, s.repoName].some(v => v && v.toLowerCase().includes(q));
+  }).slice(0, 30);
+  searchHighlight = matches.length ? 0 : -1;
+
+  if (!state.sessions.length) {
+    searchResults.innerHTML = '<div class="search-empty">No chats yet. Ask a question to start one.</div>';
+    return;
+  }
+  if (!matches.length) {
+    searchResults.innerHTML = '<div class="search-empty">No chats match "' + escapeHtml(searchInput.value.trim()) + '".</div>';
+    return;
+  }
+  searchResults.innerHTML = matches.map((s, i) => {
+    const when = new Date(s.lastActive || s.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const meta = [s.repoName, when, s.queryCount ? s.queryCount + ' question' + (s.queryCount === 1 ? '' : 's') : ''].filter(Boolean).join(' \u00B7 ');
+    return '<button class="search-result' + (i === 0 ? ' is-highlighted' : '') + '" role="option" data-session-id="' + escapeHtml(s.sessionId) + '">' +
+      '<strong>' + highlightMatch(s.title || 'Chat Session', q) + '</strong>' +
+      '<small>' + escapeHtml(meta) + '</small>' +
+    '</button>';
+  }).join('');
+  searchResults.querySelectorAll('.search-result').forEach(btn => {
+    btn.addEventListener('click', () => {
+      closeSearchOverlay();
+      loadSession(btn.getAttribute('data-session-id'));
+    });
+  });
+}
+
+navSearch.addEventListener('click', openSearch);
+closeSearch.addEventListener('click', closeSearchOverlay);
 searchOverlay.addEventListener('click', (e) => {
-  if (e.target === searchOverlay) searchOverlay.style.display = 'none';
+  if (e.target === searchOverlay) closeSearchOverlay();
+});
+searchInput.addEventListener('input', renderSearchResults);
+searchInput.addEventListener('keydown', (e) => {
+  const items = searchResults ? Array.from(searchResults.querySelectorAll('.search-result')) : [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!items.length) return;
+    e.preventDefault();
+    searchHighlight = (searchHighlight + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items.forEach((el, i) => el.classList.toggle('is-highlighted', i === searchHighlight));
+    items[searchHighlight].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && items[searchHighlight]) {
+    items[searchHighlight].click();
+  }
+});
+
+// Keyboard: Ctrl/Cmd+K opens search, Escape closes the top-most dialog.
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && (!signinGate || signinGate.style.display === 'none')) {
+    e.preventDefault();
+    openSearch();
+  } else if (e.key === 'Escape') {
+    if (settingsOverlay && settingsOverlay.style.display !== 'none') closeSettings();
+    else if (searchOverlay.style.display !== 'none') closeSearchOverlay();
+    else if (shell.classList.contains('sidebar-open')) setSidebarOpen(false);
+  }
 });
 
 // ---- Nav: Gallery -----------------------------------------------
 navGallery.addEventListener('click', () => {
+  setSidebarOpen(false);
   setView('gallery');
   setNavActive(navGallery);
   modeChat.classList.remove('active');
@@ -154,17 +319,24 @@ async function connectRepository() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
     });
+    if (!res.ok) throw new Error(await responseError(res, 'Could not connect repository (' + res.status + ').'));
     const data = await res.json();
     const id = (data.repository && data.repository.id) || data.repositoryId || null;
     const repoName = (data.repository && data.repository.name) || url.replace('https://github.com/', '');
     const userRole = (data.repository && data.repository.userRole) || 'unknown';
+    const ready = Boolean(data.alreadyIndexed);
 
-    state.connected.push({ url, id, name: repoName, userRole: userRole, status: 'indexing', progress: 0 });
+    state.connected = state.connected.filter(r => r.id !== id);
+    state.connected.unshift({ url: (data.repository && data.repository.url) || url, id, name: repoName, userRole: userRole, status: ready ? 'ready' : 'indexing', progress: ready ? 1 : 0 });
     state.activeRepoId = id;
     localStorage.setItem('tracie_active_repo', id);
     renderConnected();
-    // Start polling for indexing progress immediately after connect
-    startIndexingPoller(id);
+    if (ready) {
+      showToast(repoName + ' is connected and ready to query.', 'success');
+    } else {
+      showToast('Connected ' + repoName + '. Indexing has started; you can ask questions once it finishes.', 'info');
+      startIndexingPoller(id);
+    }
     repoInput.value = '';
 
     // Check if role confirmation dialog is needed
@@ -175,6 +347,7 @@ async function connectRepository() {
     }
   } catch (err) {
     console.error('Connect error:', err);
+    showToast(err.message || 'Could not connect repository.', 'error');
   } finally {
     connectBtn.textContent = 'Connect Codebase';
     connectBtn.disabled = false;
@@ -214,11 +387,12 @@ if (saveRoleModal) {
     const commitMode = roleCommitModeSelect ? roleCommitModeSelect.value : 'pr';
 
     try {
-      await fetch('/api/repos/' + currentRoleModalRepoId + '/settings', {
+      const res = await fetch('/api/repos/' + currentRoleModalRepoId + '/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userRole, autoCommit, commitMode })
       });
+      if (!res.ok) throw new Error(await responseError(res, 'Could not save repository settings.'));
       // Update local state
       const target = state.connected.find(r => r.id === currentRoleModalRepoId);
       if (target) target.userRole = userRole;
@@ -226,7 +400,7 @@ if (saveRoleModal) {
       if (state.view === 'pending') loadPendingDocs();
       showPendingNotification('Repository access configured as ' + userRole + ' (' + commitMode.toUpperCase() + ' mode).', 'success');
     } catch (e) {
-      console.warn('Failed to update repo settings:', e);
+      showToast(e.message || 'Could not save repository settings.', 'error');
     } finally {
       closeRoleModalDialog();
     }
@@ -272,10 +446,11 @@ function startIndexingPoller(repoId) {
         // Final re-render to clean up progress bar
         renderConnected();
         if (status === 'ready') {
-          console.log('[TRACiE] Indexing complete for ' + (repo ? repo.name : repoId) + '. Ready for queries.');
+          showToast((repo ? repo.name : 'Repository') + ' finished indexing and is ready to query.', 'success');
         } else {
-          console.warn('[TRACiE] Indexing failed for ' + (repo ? repo.name : repoId) + '.');
+          showToast((repo ? repo.name : 'Repository') + ' failed to index' + (d.error ? ': ' + d.error : '.') + ' Use the \u21BB button to retry.', 'error');
         }
+        if (settingsOverlay && settingsOverlay.style.display !== 'none') renderSettingsRepos();
       }
     } catch (e) { /* swallow */ }
   }, 2000);
@@ -341,44 +516,12 @@ function renderConnected() {
 
     div.querySelector('.repo-reindex-btn').addEventListener('click', function(e) {
       e.stopPropagation();
-      var btn = e.currentTarget;
-      btn.disabled = true;
-      btn.textContent = '...';
-      // full:true forces every file to be re-chunked and re-embedded. Without it, an incremental
-      // reindex compares git blob SHAs and no-ops when nothing changed on GitHub — which made this
-      // button look broken (e.g. after switching embedding providers, when the repo itself hasn't changed).
-      fetch('/api/repos/' + id + '/reindex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ full: true }) })
-        .then(function(r) {
-          if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Reindex failed (' + r.status + ')'); });
-          return r.json();
-        })
-        .then(function() {
-          btn.innerHTML = '&#x21BB;';
-          btn.disabled = false;
-          // Update status and start polling
-          const repo = state.connected.find(function(x) { return x.id === id; });
-          if (repo) { repo.status = 'indexing'; repo.progress = 0; }
-          renderConnected();
-          startIndexingPoller(id);
-        })
-        .catch(function(err) {
-          btn.innerHTML = '&#x21BB;';
-          btn.disabled = false;
-          alert('Reindex failed to start: ' + (err.message || 'unknown error'));
-        });
+      reindexRepo(id, e.currentTarget);
     });
 
     div.querySelector('button[data-url]').addEventListener('click', function(e) {
       e.stopPropagation();
-      state.connected = state.connected.filter(function(r) { return r.id !== id && r.url !== url; });
-      if (state.activeRepoId === id) {
-        state.activeRepoId = state.connected.length > 0 ? state.connected[0].id : null;
-        if (state.activeRepoId) localStorage.setItem('tracie_active_repo', state.activeRepoId);
-        else localStorage.removeItem('tracie_active_repo');
-      }
-      // Stop polling if disconnecting
-      if (_indexingPollers[id]) { clearInterval(_indexingPollers[id]); delete _indexingPollers[id]; }
-      renderConnected();
+      disconnectRepo(id);
     });
 
     wrap.appendChild(div);
@@ -390,17 +533,69 @@ function renderConnected() {
   });
 }
 
+/**
+ * Full re-index (every file re-chunked and re-embedded). Without full:true an incremental
+ * reindex compares git blob SHAs and no-ops when nothing changed on GitHub.
+ */
+async function reindexRepo(id, btn) {
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const r = await fetch('/api/repos/' + id + '/reindex', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full: true })
+    });
+    if (!r.ok) throw new Error(await responseError(r, 'Reindex failed (' + r.status + ')'));
+    const repo = state.connected.find(x => x.id === id);
+    if (repo) { repo.status = 'indexing'; repo.progress = 0; }
+    renderConnected();
+    startIndexingPoller(id);
+    showToast('Re-indexing ' + (repo ? repo.name : 'repository') + '...', 'info');
+  } catch (err) {
+    showToast('Re-index failed to start: ' + (err.message || 'unknown error'), 'error');
+  } finally {
+    if (btn) { btn.innerHTML = original; btn.disabled = false; }
+    if (settingsOverlay && settingsOverlay.style.display !== 'none') renderSettingsRepos();
+  }
+}
+
+/** Removes a repository from the signed-in user's account (the shared index is kept). */
+async function disconnectRepo(id) {
+  const repo = state.connected.find(r => r.id === id);
+  const label = repo ? repo.name : 'this repository';
+  if (!confirm('Remove ' + label + ' from your account? Your chats about it stay in your history.')) return;
+  try {
+    const res = await fetch('/api/repos/' + id, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(await responseError(res, 'Could not remove repository.'));
+    state.connected = state.connected.filter(r => r.id !== id);
+    if (state.activeRepoId === id) {
+      state.activeRepoId = state.connected.length > 0 ? state.connected[0].id : null;
+      if (state.activeRepoId) localStorage.setItem('tracie_active_repo', state.activeRepoId);
+      else localStorage.removeItem('tracie_active_repo');
+    }
+    if (_indexingPollers[id]) { clearInterval(_indexingPollers[id]); delete _indexingPollers[id]; }
+    renderConnected();
+    if (settingsOverlay && settingsOverlay.style.display !== 'none') renderSettingsRepos();
+    showToast('Removed ' + label + '.', 'info');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
 async function fetchConnectedRepos() {
   try {
     const res = await fetch('/api/repos');
+    if (!res.ok) return;
     const data = await res.json();
     const repos = data.repositories || (Array.isArray(data) ? data : []);
-    if (Array.isArray(repos) && repos.length > 0) {
+    if (Array.isArray(repos)) {
       state.connected = repos.map(function(r) {
         return {
           id: r.id,
           url: r.url,
           name: r.name || r.url.replace('https://github.com/', ''),
+          userRole: r.userRole || 'unknown',
           status: r.indexStatus || 'ready',
           progress: (r.latestJob && r.latestJob.chunksTotal > 0)
             ? Math.min(1, (r.latestJob.chunksDone || 0) / r.latestJob.chunksTotal)
@@ -411,9 +606,12 @@ async function fetchConnectedRepos() {
       const saved = localStorage.getItem('tracie_active_repo');
       if (saved && state.connected.some(r => r.id === saved)) {
         state.activeRepoId = saved;
-      } else if (!state.activeRepoId && state.connected.length > 0) {
+      } else if (state.connected.length > 0) {
         state.activeRepoId = state.connected[0].id;
         localStorage.setItem('tracie_active_repo', state.activeRepoId);
+      } else {
+        state.activeRepoId = null;
+        localStorage.removeItem('tracie_active_repo');
       }
       renderConnected();
     }
@@ -421,7 +619,6 @@ async function fetchConnectedRepos() {
     console.warn('Failed to load connected repositories:', err);
   }
 }
-fetchConnectedRepos();
 
 // ---- Suggestion cards ------------------------------------------
 document.getElementById('suggSchema').addEventListener('click', () => runSuggestion('schema'));
@@ -578,8 +775,17 @@ async function sendMessage(text, canvasType) {
   sendBtn.disabled = true;
   setNavActive(navNewChat);
   setView('chat');
+
+  // Live progress bubble, filled in from the server's stream events.
+  const progressMsg = { role: 'assistant', pending: true, status: 'Searching the codebase...', steps: [] };
+  state.messages.push(progressMsg);
+  const dropProgress = () => {
+    const i = state.messages.indexOf(progressMsg);
+    if (i >= 0) state.messages.splice(i, 1);
+  };
   renderMessages();
-  showCanvasLoading(canvasType);
+  if (state.prefs.autoOpenCanvas) showCanvasLoading(canvasType);
+  else toggleCanvas(false);
 
   if (!state.connected.length) {
     try { await fetchConnectedRepos(); } catch(_) {}
@@ -595,26 +801,25 @@ async function sendMessage(text, canvasType) {
     : (canvasType === 'schema' ? 'architecture_diagram' : (canvasType === 'summary' ? 'overview' : null));
 
   try {
-    const res = await fetch('/api/query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: text,
-        repoId: repoId,
-        repoName: repoName,
-        sessionId: sessionId,
-        requestedWidget: requestedWidget
-      }),
+    const payload = await streamQuery({
+      query: text,
+      repoId: repoId,
+      repoName: repoName,
+      sessionId: sessionId,
+      requestedWidget: requestedWidget
+    }, function(event, data) {
+      if (!data) return;
+      if (event === 'status' && data.message) {
+        progressMsg.status = data.message;
+      } else if (event === 'agent_handoff') {
+        progressMsg.status = 'Handing off to ' + (data.target || 'a specialist agent') + '...';
+        progressMsg.steps.push(data.thought || progressMsg.status);
+      } else if (event === 'agent_thought' && data.thought) {
+        progressMsg.steps.push(data.thought);
+      }
+      updateProgressBubble(progressMsg);
     });
-    if (!res.ok) {
-      let detail = 'Query failed (' + res.status + ')';
-      try {
-        const errorJson = await res.json();
-        if (errorJson && errorJson.message) detail = errorJson.message;
-      } catch (_) {}
-      throw new Error(detail);
-    }
-    const payload = await res.json();
+    dropProgress();
     const widgets = payload.widgets || (payload.widget ? [payload.widget] : (payload.type ? [payload] : []));
     state.apiWidgets = widgets;
     var w0 = widgets && widgets.length > 0 ? widgets[0] : (payload.type ? payload : null);
@@ -753,14 +958,18 @@ async function sendMessage(text, canvasType) {
     } else {
       renderCanvas(canvasType, widgets);
     }
+    if (!state.prefs.autoOpenCanvas) toggleCanvas(false);
     // Refresh sidebar history to include this query
     loadSidebarHistory();
     // Reset selected tag after turn unless user sets another
     state.practiceTag = '';
     updatePracticeTag();
   } catch (err) {
+    dropProgress();
     const errMsg = err.message || 'Unable to reach the TRACiE API.';
     state.apiError = errMsg;
+    // e.g. "still indexing": refresh the repo list so its progress shows in the sidebar.
+    fetchConnectedRepos();
     const isNetwork = errMsg.toLowerCase().includes('failed to fetch') || errMsg.toLowerCase().includes('network');
     state.messages.push({
       role: 'assistant',
@@ -775,6 +984,69 @@ async function sendMessage(text, canvasType) {
     sendBtn.innerHTML = '&#x2191;';
     sendBtn.disabled = false;
   }
+}
+
+/**
+ * POST /api/stream and read its server-sent events. Calls onEvent(event, data) for progress
+ * events and resolves with the final widget ('complete'); rejects on 'error'.
+ */
+async function streamQuery(body, onEvent) {
+  const res = await fetch('/api/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(await responseError(res, 'Query failed (' + res.status + ')'));
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = null;
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    let sep;
+    while ((sep = buffer.indexOf('\n\n')) >= 0) {
+      const raw = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      let event = 'message';
+      let data = '';
+      raw.split('\n').forEach(function(line) {
+        if (line.indexOf('event:') === 0) event = line.slice(6).trim();
+        else if (line.indexOf('data:') === 0) data += line.slice(5).trim();
+      });
+      let parsed = null;
+      try { parsed = data ? JSON.parse(data) : null; } catch (_) {}
+      if (event === 'complete') result = parsed;
+      else if (event === 'error') throw new Error((parsed && parsed.message) || 'The answer could not be generated.');
+      else if (onEvent) onEvent(event, parsed);
+    }
+  }
+  if (!result) throw new Error('The connection closed before an answer arrived. Please try again.');
+  return result;
+}
+
+function progressInnerHtml(msg) {
+  const steps = state.prefs.showAgentActivity ? msg.steps.slice(-5) : [];
+  return '<div class="chat-progress-status"><span class="chat-progress-spinner" aria-hidden="true"></span>' +
+      '<span>' + escapeHtml(msg.status) + '</span></div>' +
+    (steps.length
+      ? '<ul class="chat-progress-steps">' + steps.map(function(s) {
+          const line = String(s).replace(/\s+/g, ' ');
+          return '<li>' + escapeHtml(line.length > 140 ? line.slice(0, 137) + '...' : line) + '</li>';
+        }).join('') + '</ul>'
+      : '');
+}
+
+/** Updates the live progress bubble in place (a full re-render would flicker). */
+function updateProgressBubble(msg) {
+  const el = messageList.querySelector('.chat-progress');
+  if (!el) return renderMessages();
+  el.innerHTML = progressInnerHtml(msg);
+  messageList.scrollTop = messageList.scrollHeight;
 }
 
 function switchToTurn(turnId) {
@@ -850,6 +1122,15 @@ function renderMessages() {
   messageList.innerHTML = '';
   state.messages.forEach(function(msg) {
     const div = document.createElement('div');
+    if (msg.pending) {
+      div.className = 'chat-message assistant';
+      div.setAttribute('aria-busy', 'true');
+      div.innerHTML =
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span class="message-mark">&#x2723;</span></div>' +
+        '<div class="chat-bubble assistant-bubble"><div class="chat-progress">' + progressInnerHtml(msg) + '</div></div>';
+      messageList.appendChild(div);
+      return;
+    }
     const turnId = msg.turnId;
     const isActive = typeof turnId === 'number' && turnId === state.activeTurnIndex;
     div.className = 'chat-message ' + msg.role + (isActive ? ' is-active-turn' : '');
@@ -994,12 +1275,10 @@ async function loadSidebarHistory() {
     if (!res.ok) return;
     const data = await res.json();
     const sessions = (data.sessions || []).filter(s => s && s.sessionId);
+    state.sessions = sessions;
 
     if (sessions.length === 0) {
-      historyPanel.innerHTML =
-        '<div style="padding: 16px 18px; color: var(--muted); font-size: 12px; font-style: italic;">' +
-        'No chat history yet.<br>Start a conversation above!' +
-        '</div>';
+      historyPanel.innerHTML = '<div class="history-empty">No chats yet. Ask a question to start one.</div>';
       return;
     }
 
@@ -1055,6 +1334,7 @@ async function loadSidebarHistory() {
       btn.addEventListener('click', () => {
         const sid = btn.getAttribute('data-session-id');
         if (sid) loadSession(sid);
+        setSidebarOpen(false);
       });
     });
 
@@ -1094,7 +1374,7 @@ async function loadSession(sessionId) {
 
   try {
     const res = await fetch('/api/sessions/' + sessionId);
-    if (!res.ok) throw new Error('Session not found');
+    if (!res.ok) throw new Error('That chat could not be found. It may have been deleted.');
     const data = await res.json();
     const queries = data.queries || [];
 
@@ -1169,26 +1449,32 @@ async function loadSession(sessionId) {
     }
 
   } catch (err) {
-    console.error('Failed to load session:', err);
+    sessionStorage.removeItem('tracie_session');
+    showToast(err.message, 'error');
+    loadSidebarHistory();
   }
 }
 
 async function deleteSession(sessionId) {
   try {
-    await fetch('/api/sessions/' + sessionId, { method: 'DELETE' });
+    const res = await fetch('/api/sessions/' + sessionId, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(await responseError(res, 'Could not delete chat.'));
     if (sessionStorage.getItem('tracie_session') === sessionId) {
       newChat();
     }
     await loadSidebarHistory();
   } catch (err) {
-    console.error('Failed to delete session:', err);
+    showToast(err.message || 'Could not delete chat.', 'error');
   }
 }
 
 // ---- Pending Docs Notification ----------------------------------
 function showPendingNotification(message, type = 'info') {
   const notif = document.getElementById('pendingNotification');
-  if (!notif) return;
+  if (!notif || state.view !== 'pending') {
+    showToast(message, type);
+    return;
+  }
   notif.className = 'pending-notification ' + type;
   notif.innerHTML = '<span>' + escapeHtml(message) + '</span><button style="background:none;border:none;cursor:pointer;font-size:14px;" onclick="this.parentElement.style.display=\'none\'">&#x2715;</button>';
   notif.style.display = 'flex';
@@ -1226,7 +1512,9 @@ async function loadPendingDocs() {
         const repoData = await repoRes.json();
         if (rolePillEl) {
           rolePillEl.textContent = 'Role: ' + (repoData.userRole ? repoData.userRole.toUpperCase() : 'UNKNOWN');
-          rolePillEl.style.background = repoData.userRole === 'owner' || repoData.userRole === 'contributor' ? '#047857' : '#475569';
+          const canWrite = repoData.userRole === 'owner' || repoData.userRole === 'contributor';
+          rolePillEl.classList.toggle('is-writer', canWrite);
+          rolePillEl.classList.toggle('is-reader', !canWrite);
         }
         if (autoCommitToggle) autoCommitToggle.checked = Boolean(repoData.autoCommit);
         if (commitModeSelect) commitModeSelect.value = repoData.commitMode || 'pr';
@@ -1510,11 +1798,9 @@ async function ensureSessionId() {
     console.warn('[sessions] Failed to create backend session, generating local fallback:', err);
   }
 
-  // Fallback random UUID
-  id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+  // No repository yet (or the server is unreachable): an unsaved, in-memory-only chat id.
+  // It is deliberately not a UUID, so the next message tries to create a real session again.
+  id = 'local-' + Math.random().toString(36).slice(2, 10);
   sessionStorage.setItem('tracie_session', id);
   return id;
 }
@@ -1740,28 +2026,9 @@ if (typeof mermaid !== 'undefined') {
 
 
 
-// ---- Load repos from backend on startup --------------------------
-async function loadReposFromBackend() {
-  try {
-    const res = await fetch('/api/repos');
-    if (!res.ok) return;
-    const data = await res.json();
-    const repos = data.repositories || [];
-    repos.forEach(function(repo) {
-      const url = repo.url || ('https://github.com/' + repo.name);
-      if (!state.connected.some(function(r) { return r.url === url; })) {
-        state.connected.push({ url: url, id: repo.id, status: repo.indexStatus });
-      }
-    });
-    renderConnected();
-  } catch (e) {
-    // silently ignore - server may not be ready yet
-  }
-}
-
 // ---- Init -------------------------------------------------------
+// Data loads once the user is signed in (see initGithubAuth at the end of this file).
 setView('chat');
-loadReposFromBackend();
 
 
 /* ================================================================
@@ -3431,13 +3698,12 @@ function attachGalleryDemos() {
 
   demos.forEach(function(d) {
     var card = document.createElement('div');
-    card.className = 'widget-spec';
-    card.style.cursor = 'pointer';
+    card.className = 'widget-spec is-demo';
     card.innerHTML =
       '<div class="widget-label">' + d.label + '</div>' +
-      '<div class="preview-icon" style="font-size:28px;margin:12px 0;color:var(--sage);">' + d.icon + '</div>' +
-      '<p style="font-size:12px;color:var(--muted);">Click to preview this widget in the canvas</p>' +
-      '<button style="margin-top:10px;padding:6px 14px;background:var(--dark);color:#fff;border-radius:6px;font-size:12px;">Open in Canvas</button>';
+      '<div class="preview-icon" aria-hidden="true">' + d.icon + '</div>' +
+      '<p class="demo-hint">Click to preview this widget in the canvas</p>' +
+      '<button class="dark-button">Open in Canvas</button>';
     card.addEventListener('click', function() {
       // Switch to chat/canvas mode and render the demo widget
       state.sent = true;
@@ -3462,12 +3728,50 @@ navGallery.addEventListener('click', function() {
   setTimeout(attachGalleryDemos, 0);
 });
 
-// Load persistent sidebar chat history on startup
-loadSidebarHistory();
 
-// ── GitHub OAuth Session ──────────────────────────────────────────────────
+// ── Account: sign-in, boot and Settings ───────────────────────────────────
+const settingsOverlay = document.getElementById('settingsOverlay');
+
+/** Loads everything that belongs to the signed-in user. */
+async function bootApp() {
+  hideSignInGate();
+  await Promise.all([fetchConnectedRepos(), loadSidebarHistory(), loadAccount()]);
+}
+
+async function loadAccount() {
+  try {
+    const res = await fetch('/api/me');
+    if (!res.ok) return;
+    state.user = await res.json();
+    state.prefs = Object.assign({ showAgentActivity: true, autoOpenCanvas: true }, state.user.preferences || {});
+  } catch (_) { /* Settings shows the session profile instead */ }
+}
+
+function resetLocalState() {
+  sessionStorage.removeItem('tracie_session');
+  localStorage.removeItem('tracie_active_repo');
+  Object.keys(_indexingPollers).forEach(id => { clearInterval(_indexingPollers[id]); delete _indexingPollers[id]; });
+  state.connected = [];
+  state.sessions = [];
+  state.activeRepoId = null;
+  state.user = null;
+  newChat();
+  renderConnected();
+  const historyPanel = document.getElementById('historyPanel');
+  if (historyPanel) historyPanel.innerHTML = '';
+}
+
+async function signOut() {
+  try {
+    await fetch('/auth/logout', { method: 'POST' });
+  } catch (_) {}
+  closeSettings();
+  resetLocalState();
+  state.githubUser = null;
+  showSignInGate();
+}
+
 (function initGithubAuth() {
-  var notify = typeof showPendingNotification === 'function' ? showPendingNotification : function(msg, tone) { console.log('[Auth ' + (tone || 'info') + ']', msg); };
   var loginBtn     = document.getElementById('githubLoginBtn');
   var profileRow   = document.getElementById('githubProfileRow');
   var avatarImg    = document.getElementById('githubAvatar');
@@ -3479,48 +3783,161 @@ loadSidebarHistory();
     if (profileRow) profileRow.style.display = 'flex';
     if (avatarImg)  { avatarImg.src = user.avatarUrl || ''; avatarImg.alt = user.login + ' avatar'; }
     if (usernameEl) usernameEl.textContent = user.name || user.login;
-    // Store in state so other parts of the app can read it
     state.githubUser = user;
   }
 
-  function showLoggedOut() {
-    if (loginBtn)   loginBtn.style.display   = 'flex';
-    if (profileRow) profileRow.style.display = 'none';
-    state.githubUser = null;
-  }
-
-  // Check existing session
-  fetch('/auth/me', { credentials: 'include' })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.authenticated) {
-        showLoggedIn(data);
-      } else {
-        showLoggedOut();
-      }
-    })
-    .catch(function() { showLoggedOut(); });
-
-  // Logout handler
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', function() {
-      fetch('/auth/logout', { method: 'POST', credentials: 'include' })
-        .then(function() { showLoggedOut(); notify('Signed out from GitHub.', 'info'); })
-        .catch(function() {});
-    });
-  }
-
-  // Show welcome toast if redirected back after OAuth login
   var urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('gh_login') === '1') {
-    // Clean up the URL without reloading
+  var justSignedIn = urlParams.get('gh_login') === '1';
+  if (justSignedIn) {
+    // A different account may have signed in: don't reuse the previous user's chat or repo.
+    sessionStorage.removeItem('tracie_session');
+    localStorage.removeItem('tracie_active_repo');
+    state.activeRepoId = null;
     var cleanUrl = window.location.pathname + window.location.search.replace(/[?&]gh_login=1/, '').replace(/^&/, '?');
     history.replaceState(null, '', cleanUrl || '/');
-    // Wait for /auth/me to resolve, then show notification
-    setTimeout(function() {
-      if (state.githubUser) {
-        notify('Signed in as @' + (state.githubUser.login || state.githubUser.name) + '. You can now commit doc proposals directly!', 'success');
-      }
-    }, 800);
   }
+
+  fetch('/auth/me')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.authenticated) return showSignInGate();
+      showLoggedIn(data);
+      bootApp();
+      if (justSignedIn) showToast('Signed in as @' + data.login + '.', 'success');
+    })
+    .catch(function() { showSignInGate(); });
+
+  if (logoutBtn) logoutBtn.addEventListener('click', signOut);
 })();
+
+// ---- Settings ---------------------------------------------------
+const navSettings = document.getElementById('navSettings');
+
+function openSettings() {
+  if (!settingsOverlay) return;
+  setSidebarOpen(false);
+  const user = state.user || {};
+  const gh = state.githubUser || {};
+  const avatar = document.getElementById('settingsAvatar');
+  avatar.src = user.avatarUrl || gh.avatarUrl || '';
+  avatar.alt = (user.login || gh.login || '') + ' avatar';
+  document.getElementById('settingsName').textContent = user.name || gh.name || user.login || gh.login || 'Signed in';
+  const loginLink = document.getElementById('settingsLogin');
+  loginLink.textContent = '@' + (user.login || gh.login || '');
+  loginLink.href = user.profileUrl || gh.profileUrl || '#';
+  document.getElementById('settingsSince').textContent = user.createdAt
+    ? 'Member since ' + new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    : '';
+
+  document.getElementById('prefShowActivity').checked = Boolean(state.prefs.showAgentActivity);
+  document.getElementById('prefAutoCanvas').checked = Boolean(state.prefs.autoOpenCanvas);
+
+  renderSettingsRepos();
+  renderSettingsChatCount();
+  settingsOverlay.style.display = 'flex';
+  document.getElementById('closeSettings').focus();
+}
+
+function closeSettings() {
+  if (settingsOverlay) settingsOverlay.style.display = 'none';
+}
+
+function renderSettingsChatCount() {
+  const n = state.sessions.length;
+  document.getElementById('settingsChatCount').textContent =
+    n === 0 ? 'You have no saved chats.' : 'You have ' + n + ' saved chat' + (n === 1 ? '' : 's') + '.';
+  document.getElementById('settingsClearChats').disabled = n === 0;
+}
+
+function renderSettingsRepos() {
+  const list = document.getElementById('settingsRepoList');
+  if (!list) return;
+  if (!state.connected.length) {
+    list.innerHTML = '<p class="settings-empty">No repositories yet. Connect one from the sidebar.</p>';
+    return;
+  }
+  const roles = [['owner', 'Owner'], ['contributor', 'Contributor'], ['reader', 'Read-only'], ['unknown', 'Not set']];
+  list.innerHTML = '';
+  state.connected.forEach(function(repo) {
+    const statusText = { ready: 'Ready', indexing: 'Indexing...', pending: 'Queued', failed: 'Indexing failed' }[repo.status] || repo.status;
+    const row = document.createElement('div');
+    row.className = 'settings-repo';
+    row.innerHTML =
+      '<div class="settings-repo-name" title="' + escapeHtml(repo.url) + '">' + escapeHtml(repo.name) +
+        '<small>' + escapeHtml(statusText) + (repo.id === state.activeRepoId ? ' · active' : '') + '</small></div>' +
+      '<div class="settings-repo-actions">' +
+        '<select aria-label="Your role on ' + escapeHtml(repo.name) + '">' +
+          roles.map(r => '<option value="' + r[0] + '"' + ((repo.userRole || 'unknown') === r[0] ? ' selected' : '') + '>' + r[1] + '</option>').join('') +
+        '</select>' +
+        '<button class="outline-button" data-action="reindex">Re-index</button>' +
+        '<button class="danger-button" data-action="remove">Remove</button>' +
+      '</div>';
+
+    row.querySelector('select').addEventListener('change', async function() {
+      const userRole = this.value;
+      try {
+        const res = await fetch('/api/repos/' + repo.id + '/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole })
+        });
+        if (!res.ok) throw new Error(await responseError(res, 'Could not update role.'));
+        repo.userRole = userRole;
+        showToast('Role on ' + repo.name + ' set to ' + this.options[this.selectedIndex].text + '.', 'success');
+      } catch (err) {
+        this.value = repo.userRole || 'unknown';
+        showToast(err.message, 'error');
+      }
+    });
+    row.querySelector('[data-action="reindex"]').addEventListener('click', e => reindexRepo(repo.id, e.currentTarget));
+    row.querySelector('[data-action="remove"]').addEventListener('click', () => disconnectRepo(repo.id));
+    list.appendChild(row);
+  });
+}
+
+async function savePreference(key, value, input) {
+  const previous = state.prefs[key];
+  state.prefs[key] = value;
+  try {
+    const res = await fetch('/api/me/preferences', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: value })
+    });
+    if (!res.ok) throw new Error(await responseError(res, 'Could not save preference.'));
+    showToast('Preference saved.', 'success');
+  } catch (err) {
+    state.prefs[key] = previous;
+    if (input) input.checked = Boolean(previous);
+    showToast(err.message, 'error');
+  }
+}
+
+if (navSettings) navSettings.addEventListener('click', openSettings);
+if (settingsOverlay) {
+  document.getElementById('closeSettings').addEventListener('click', closeSettings);
+  settingsOverlay.addEventListener('click', e => { if (e.target === settingsOverlay) closeSettings(); });
+  document.getElementById('settingsSignOut').addEventListener('click', signOut);
+  document.getElementById('prefShowActivity').addEventListener('change', function() {
+    savePreference('showAgentActivity', this.checked, this);
+  });
+  document.getElementById('prefAutoCanvas').addEventListener('change', function() {
+    savePreference('autoOpenCanvas', this.checked, this);
+  });
+  document.getElementById('settingsClearChats').addEventListener('click', async function() {
+    if (!confirm('Delete all of your chats? This cannot be undone.')) return;
+    this.disabled = true;
+    try {
+      const res = await fetch('/api/sessions', { method: 'DELETE' });
+      if (!res.ok) throw new Error(await responseError(res, 'Could not delete chats.'));
+      const data = await res.json();
+      newChat();
+      await loadSidebarHistory();
+      renderSettingsChatCount();
+      showToast('Deleted ' + data.deleted + ' chat' + (data.deleted === 1 ? '' : 's') + '.', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+      this.disabled = false;
+    }
+  });
+}

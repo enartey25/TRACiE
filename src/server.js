@@ -29,6 +29,8 @@ const webhooksRouter = require('./routes/webhooks');
 const sessionsRouter = require('./routes/sessions');
 const docProposalsRouter = require('./routes/docProposals');
 const authRouter = require('./routes/auth');
+const meRouter = require('./routes/me');
+const { requireUser } = require('./middleware/requireUser');
 const postgres = require('./db/postgres');
 const chroma = require('./db/chroma');
 const repoStore = require('./services/repos/repoStore');
@@ -41,14 +43,22 @@ const app = express();
 // Trust reverse proxy (Render, Cloudflare, etc.) so secure cookies work over HTTPS
 app.set('trust proxy', 1);
 
+// Static assets are served before the session middleware: they don't need a session, and
+// loading one costs a Postgres round trip per file (~1s per asset against remote Supabase).
+// no-cache (not no-store) still revalidates every load, but unchanged files come back as 304s.
+app.use(express.static(path.join(__dirname, '../public'), {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
+
 // ── Session Middleware ────────────────────────────────────────────────────────
 // Sessions are stored in the existing Postgres database.
 // connect-pg-simple creates the "session" table automatically on first use.
 app.use(session({
   store: new PgSession({
-    conString: backendConfig.databaseUrl,
-    // Reuse an existing pool if available – avoids a second connection for sessions.
-    ssl: backendConfig.databaseSsl ? { rejectUnauthorized: false } : false,
+    // Reuse the app's pool rather than opening a second one for sessions.
+    pool: postgres.getPool(),
     tableName: 'tracie_sessions',
     createTableIfMissing: true
   }),
@@ -69,11 +79,6 @@ app.use(cors({ credentials: true, origin: process.env.APP_ORIGIN || true }));
 // GitHub webhooks need the raw body for HMAC verification, so mount before express.json().
 app.use('/api/webhooks', webhooksRouter);
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public'), {
-  setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  }
-}));
 
 // Health & System Diagnostic Route
 // Returns 200 with status 'ok' when Postgres + ChromaDB are reachable, 'degraded' otherwise.
@@ -86,6 +91,10 @@ app.get('/api/health', async (req, res) => {
     dependencies: { postgres: pg, chromadb: vector }
   });
 });
+
+// Everything under /api below needs a signed-in GitHub user, except the public paths
+// listed in middleware/requireUser.js (health, auth status, fixtures, webhooks).
+app.use('/api', requireUser);
 
 // Cache Telemetry & Invalidation Routes
 app.get('/api/cache/stats', (req, res) => {
@@ -124,6 +133,9 @@ app.get('/api/fixtures/:type', (req, res) => {
   }
 });
 
+// Signed-in user's account and preferences
+app.use('/api', meRouter);
+
 // Ethan's Core Routes (Phase 1 & Phase 2)
 app.use('/api', queryRouter);
 app.use('/api', streamRouter);
@@ -135,6 +147,13 @@ app.use('/api', audioRouter);
 app.use('/api', reposRouter);
 app.use('/api', sessionsRouter);
 app.use('/api', docProposalsRouter);
+
+// JSON errors for anything a route passed to next(err)
+app.use((err, req, res, next) => {
+  console.error('[server] unhandled route error:', err);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
 
 // Start server if run directly
 if (require.main === module) {

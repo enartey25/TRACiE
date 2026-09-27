@@ -3,6 +3,7 @@ const router = express.Router();
 const proposals = require('../services/docs/proposalStore');
 const repoStore = require('../services/repos/repoStore');
 const { isUuid } = require('../services/sessions/sessionStore');
+const { assertRepoAccess, assertProposalAccess } = require('../middleware/requireUser');
 
 /**
  * Documentation proposals stored in Postgres.
@@ -24,9 +25,7 @@ router.post('/repos/:id/doc-proposals', async (req, res) => {
     return res.status(400).json({ error: 'Field "diff_markdown" is required.' });
   }
   try {
-    if (!(await repoStore.getRepository(req.params.id))) {
-      return res.status(404).json({ error: 'Repository not found.' });
-    }
+    if ((await assertRepoAccess(req, res, req.params.id)) === null) return;
     res.status(201).json(await proposals.createProposal({ repositoryId: req.params.id, widget }));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -41,6 +40,7 @@ router.get('/repos/:id/doc-proposals', async (req, res) => {
     return res.status(400).json({ error: `status must be one of ${proposals.STATUSES.join(', ')}` });
   }
   try {
+    if ((await assertRepoAccess(req, res, req.params.id)) === null) return;
     const list = await proposals.listProposals(req.params.id, { status });
     res.json({ total: list.length, proposals: list });
   } catch (error) {
@@ -52,9 +52,8 @@ router.get('/repos/:id/doc-proposals', async (req, res) => {
 router.get('/doc-proposals/:id', async (req, res) => {
   if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid proposal id.' });
   try {
-    const proposal = await proposals.getProposal(req.params.id);
-    if (!proposal) return res.status(404).json({ error: 'Proposal not found.' });
-    res.json(proposal);
+    const proposal = await assertProposalAccess(req, res, req.params.id);
+    if (proposal) res.json(proposal);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -66,12 +65,13 @@ const { executeProposalCommit } = require('../services/docs/gitCommitEngine');
 router.post('/doc-proposals/:id/approve', async (req, res) => {
   if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid proposal id.' });
   try {
+    if (!(await assertProposalAccess(req, res, req.params.id))) return;
     const { proposal, conflict } = await proposals.reviewProposal(req.params.id, 'approved', req.body && req.body.note);
     if (!proposal) return res.status(404).json({ error: 'Proposal not found.' });
     if (conflict) return res.status(409).json({ error: conflict, proposal });
 
-    // Token resolution priority: OAuth session → explicit body.token → repo/env fallback
-    const sessionToken = req.session && req.session.github && req.session.github.accessToken;
+    // Commit as the signed-in user; fall back to an explicit body.token.
+    const sessionToken = req.user.accessToken;
 
     // Execute git commit and push / PR creation
     const commitResult = await executeProposalCommit({
@@ -95,6 +95,7 @@ router.post('/doc-proposals/:id/approve', async (req, res) => {
 router.post('/doc-proposals/:id/reject', async (req, res) => {
   if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid proposal id.' });
   try {
+    if (!(await assertProposalAccess(req, res, req.params.id))) return;
     const { proposal, conflict } = await proposals.reviewProposal(req.params.id, 'rejected', req.body && req.body.note);
     if (!proposal) return res.status(404).json({ error: 'Proposal not found.' });
     if (conflict) return res.status(409).json({ error: conflict, proposal });

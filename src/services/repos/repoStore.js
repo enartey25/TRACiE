@@ -53,19 +53,25 @@ async function updateRepositorySettings(id, { userRole, autoCommit, commitMode, 
   return rows[0] || null;
 }
 
-/** All repositories with their latest indexing job (for the repo picker / dashboard). */
-async function listRepositories() {
+/**
+ * Repositories with their latest indexing job (for the repo picker / dashboard).
+ * With a userId, only that user's linked repositories, carrying the user's own role;
+ * without one (webhooks, background jobs), every repository.
+ */
+async function listRepositories(userId) {
   const { rows } = await query(
     `SELECT r.id, r.url, r.name, r.platform, r.index_status, r.last_commit_sha, r.last_indexed,
-            r.history_indexed_at, r.created_at,
+            r.history_indexed_at, ${userId ? 'ur.added_at AS created_at' : 'r.created_at'},
             (r.encrypted_token IS NOT NULL) AS has_token,
-            r.user_role, r.auto_commit, r.commit_mode, r.push_branch,
+            ${userId ? 'ur.user_role' : 'r.user_role'}, r.auto_commit, r.commit_mode, r.push_branch,
             j.id AS job_id, j.status AS job_status, j.stage, j.chunks_done, j.chunks_total
      FROM repositories r
+     ${userId ? 'JOIN user_repositories ur ON ur.repository_id = r.id AND ur.user_id = $1' : ''}
      LEFT JOIN LATERAL (
        SELECT * FROM indexing_jobs WHERE repository_id = r.id ORDER BY started_at DESC LIMIT 1
      ) j ON true
-     ORDER BY r.created_at DESC`
+     ORDER BY ${userId ? 'ur.added_at' : 'r.created_at'} DESC`,
+    userId ? [userId] : []
   );
   return rows;
 }
@@ -163,6 +169,18 @@ async function getIndexedFiles(repositoryId) {
   return new Map(rows.map(r => [r.file_path, r.blob_sha]));
 }
 
+/**
+ * True when any indexing job ever stored chunks for the repository, i.e. it has content.
+ * (indexed_files can't answer this: a rebuild clears it before re-embedding.)
+ */
+async function hasIndexedContent(repositoryId) {
+  const { rows } = await query(
+    'SELECT EXISTS (SELECT 1 FROM indexing_jobs WHERE repository_id = $1 AND chunks_done > chunks_failed) AS yes',
+    [repositoryId]
+  );
+  return rows[0].yes;
+}
+
 /** @param {Array<{ filePath, blobSha, chunkCount }>} files */
 async function upsertIndexedFiles(repositoryId, files) {
   if (!files.length) return;
@@ -190,5 +208,5 @@ module.exports = {
   updateRepositorySettings,
   setHistoryIndexed, setPendingReindex, takePendingReindex,
   createJob, updateJob, getLatestJob, getActiveJob, failOrphanedJobs,
-  getIndexedFiles, upsertIndexedFiles, deleteIndexedFiles
+  getIndexedFiles, upsertIndexedFiles, deleteIndexedFiles, hasIndexedContent
 };

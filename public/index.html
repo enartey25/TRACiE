@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=2.9">
+  <link rel="stylesheet" href="index.css?v=3.0">
   <link rel="stylesheet" href="renderer/ui-renderer.css">
   <!-- Playfair Display for UIRenderer serif titles -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@
     <div class="brand-row">
       <div class="brand-mark" aria-hidden="true">&#x2723;</div>
       <div class="brand-name">TRACiE</div>
-      <button class="collapse-button" id="collapseBtn" aria-label="Collapse sidebar">&#x2039;</button>
+      <button class="collapse-button" id="collapseBtn" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">&#x2039;</button>
     </div>
 
     <nav class="primary-nav" aria-label="Primary navigation">
@@ -31,7 +31,7 @@
         <span class="icon" aria-hidden="true">&#x270E;</span>
         <span>New chat</span>
       </button>
-      <button class="nav-item" id="navSearch" aria-label="Search">
+      <button class="nav-item" id="navSearch" aria-label="Search chats" title="Search chats (Ctrl+K)">
         <span class="icon" aria-hidden="true">&#x2315;</span>
         <span>Search</span>
       </button>
@@ -57,7 +57,7 @@
     </section>
 
     <div class="history" id="historyPanel">
-      <div class="history-loading" style="padding: 12px 18px; color: var(--muted); font-size: 12px; font-style: italic;">Loading chat history...</div>
+      <div class="history-empty">Loading chat history...</div>
     </div>
 
     <div class="sidebar-bottom">
@@ -73,7 +73,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
           </svg>
-          Login with GitHub
+          Sign in with GitHub
         </a>
 
         <!-- Logged-in state (hidden by default, shown when authenticated) -->
@@ -93,6 +93,9 @@
   <section class="workspace">
 
     <div class="topbar">
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Open sidebar" title="Open sidebar">
+        <span aria-hidden="true">&#x2630;</span>
+      </button>
       <div class="mode-switch">
         <button class="mode-btn active" id="modeChat">Chat and Canvas</button>
         <button class="mode-btn" id="modePending">Pending Docs</button>
@@ -109,6 +112,7 @@
             <input type="text" id="searchInput" placeholder="Search conversations..." aria-label="Search conversations" autocomplete="off">
             <button class="close-btn" id="closeSearch" aria-label="Close search">&#x2715;</button>
           </div>
+          <div class="search-results" id="searchResults" role="listbox" aria-label="Matching chats"></div>
         </div>
       </div>
 
@@ -308,15 +312,87 @@
 
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<!-- SETTINGS -->
+<div class="modal-overlay" id="settingsOverlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="modal-card settings-card">
+    <header class="modal-header">
+      <h2 id="settingsTitle">Settings</h2>
+      <button class="close-btn" id="closeSettings" aria-label="Close settings">&#x2715;</button>
+    </header>
+    <div class="settings-body">
+      <section class="settings-section">
+        <h3>Account</h3>
+        <div class="settings-account">
+          <img id="settingsAvatar" class="settings-avatar" src="" alt="" width="44" height="44">
+          <div class="settings-account-info">
+            <strong id="settingsName"></strong>
+            <a id="settingsLogin" href="#" target="_blank" rel="noopener"></a>
+            <small id="settingsSince"></small>
+          </div>
+          <button class="outline-button" id="settingsSignOut">Sign out</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h3>Repositories</h3>
+        <p class="settings-hint">Only you can see the repositories and chats in your account.</p>
+        <div id="settingsRepoList" class="settings-repo-list"></div>
+      </section>
+
+      <section class="settings-section">
+        <h3>Preferences</h3>
+        <label class="settings-toggle">
+          <span>
+            <strong>Show agent activity</strong>
+            <small>Display each step TRACiE takes while it works on an answer.</small>
+          </span>
+          <input type="checkbox" id="prefShowActivity">
+        </label>
+        <label class="settings-toggle">
+          <span>
+            <strong>Open canvas automatically</strong>
+            <small>Show diagrams, quizzes and other outputs as soon as they're ready.</small>
+          </span>
+          <input type="checkbox" id="prefAutoCanvas">
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h3>Chat history</h3>
+        <div class="settings-row">
+          <span class="settings-hint" id="settingsChatCount">&nbsp;</span>
+          <button class="danger-button" id="settingsClearChats">Delete all chats</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- SIGN-IN GATE: shown until /auth/me reports a signed-in GitHub user -->
+<div class="signin-gate" id="signinGate" style="display:none" role="dialog" aria-modal="true" aria-labelledby="signinTitle">
+  <div class="signin-card">
+    <div class="brand-mark signin-mark" aria-hidden="true">&#x2723;</div>
+    <h1 id="signinTitle">Welcome to TRACiE</h1>
+    <p>Sign in with your GitHub account to connect repositories and keep your chats private to you.</p>
+    <a href="/auth/github" class="dark-button signin-button" id="signinButton">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      Sign in with GitHub
+    </a>
+  </div>
+</div>
+
+<div class="toast-region" id="toastRegion" role="status" aria-live="polite"></div>
+
+<!-- Large CDN libraries load without blocking app.js; diagrams wait for mermaid (ensureMermaid). -->
+<script async src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <!-- Prism for UIRenderer code highlighting -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/themes/prism.min.css">
-<script src="https://cdn.jsdelivr.net/npm/prismjs@1/prism.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/prismjs@1/plugins/line-numbers/prism-line-numbers.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/prism.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/plugins/line-numbers/prism-line-numbers.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/plugins/line-numbers/prism-line-numbers.min.css">
 <!-- UIRenderer engine + widgets -->
 <script src="renderer/ui-renderer.js"></script>
 <script src="renderer/widgets/manifest.js"></script>
-<script src="app.js?v=3.4"></script>
+<script src="app.js?v=3.5"></script>
 </body>
 </html>

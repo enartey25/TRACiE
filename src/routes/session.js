@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getSessionHistory, clearSession } = require('../services/memory/sessionMemory');
+const { getSessionHistory } = require('../services/memory/sessionMemory');
 const sessionStore = require('../services/sessions/sessionStore');
 
 /**
@@ -10,6 +10,10 @@ const sessionStore = require('../services/sessions/sessionStore');
  */
 router.get('/sessions/:id/history', async (req, res) => {
   const sessionId = req.params.id;
+  // Only the owner may read a persisted session's history.
+  if (sessionStore.isUuid(sessionId) && !(await sessionStore.getSession(sessionId, req.user.id))) {
+    return res.status(404).json({ error: 'Session not found.' });
+  }
   const memHistory = getSessionHistory(sessionId, 20);
 
   if (memHistory.length > 0) {
@@ -47,19 +51,6 @@ router.get('/sessions/:id/history', async (req, res) => {
     sessionId,
     turnsCount: 0,
     history: []
-  });
-});
-
-/**
- * DELETE /api/sessions/:id
- * Clears active session history.
- */
-router.delete('/sessions/:id', (req, res) => {
-  const sessionId = req.params.id;
-  clearSession(sessionId);
-  res.json({
-    status: 'ok',
-    message: `Session ${sessionId} cleared successfully.`
   });
 });
 

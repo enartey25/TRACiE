@@ -117,11 +117,20 @@ async function embedAndStore(chunks, log) {
  * @returns {Promise<{ commits: number, pullRequests: number, chunksStored: number }>}
  */
 async function ingestHistory({ repositoryId, owner, repo, token, log = () => {} }) {
-  const client = github(token || config.githubToken);
+  let client = github(token || config.githubToken);
   const { maxChunkChars } = config.ingestion;
   const { maxCommits, maxPullRequests } = config.history;
 
-  const commits = await fetchPaged(client, `/repos/${owner}/${repo}/commits`, {}, maxCommits);
+  let commits;
+  try {
+    commits = await fetchPaged(client, `/repos/${owner}/${repo}/commits`, {}, maxCommits);
+  } catch (error) {
+    // A stored token can expire or be revoked; public repositories still work anonymously.
+    if (!(error.response && error.response.status === 401)) throw error;
+    log('history: GitHub rejected the stored token; retrying without it');
+    client = github(null);
+    commits = await fetchPaged(client, `/repos/${owner}/${repo}/commits`, {}, maxCommits);
+  }
   const pulls = await fetchPaged(client, `/repos/${owner}/${repo}/pulls`, { state: 'all', sort: 'updated', direction: 'desc' }, maxPullRequests);
   log(`history: fetched ${commits.length} commits, ${pulls.length} pull requests`);
 

@@ -14,30 +14,34 @@ const { query } = require('../../db/postgres');
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = value => typeof value === 'string' && UUID_RE.test(value);
 
-async function createSession({ repositoryId, userAgent }) {
+async function createSession({ repositoryId, userId, userAgent }) {
   const { rows } = await query(
-    `INSERT INTO sessions (repository_id, user_agent) VALUES ($1, $2) RETURNING *`,
-    [repositoryId, userAgent || null]
+    `INSERT INTO sessions (repository_id, user_id, user_agent) VALUES ($1, $2, $3) RETURNING *`,
+    [repositoryId, userId || null, userAgent || null]
   );
   return rows[0];
 }
 
-async function getSession(id) {
+/** With a userId, only returns the session when it belongs to that user. */
+async function getSession(id, userId) {
   if (!isUuid(id)) return null;
-  const { rows } = await query('SELECT * FROM sessions WHERE id = $1', [id]);
+  const { rows } = userId
+    ? await query('SELECT * FROM sessions WHERE id = $1 AND user_id = $2', [id, userId])
+    : await query('SELECT * FROM sessions WHERE id = $1', [id]);
   return rows[0] || null;
 }
 
-async function listSessions(repositoryId, limit = 50) {
+async function listSessions(repositoryId, userId, limit = 50) {
   const { rows } = await query(
     `SELECT s.*, (SELECT count(*)::int FROM queries q WHERE q.session_id = s.id) AS query_count
-     FROM sessions s WHERE s.repository_id = $1 ORDER BY s.last_active DESC LIMIT $2`,
-    [repositoryId, limit]
+     FROM sessions s WHERE s.repository_id = $1 AND s.user_id = $2 ORDER BY s.last_active DESC LIMIT $3`,
+    [repositoryId, userId, limit]
   );
   return rows;
 }
 
-async function listAllSessions(limit = 50) {
+/** A user's chats across all their repositories, most recent first. */
+async function listUserSessions(userId, limit = 50) {
   const { rows } = await query(
     `SELECT s.*,
             r.name AS repo_name,
@@ -46,16 +50,23 @@ async function listAllSessions(limit = 50) {
             (SELECT q.raw_text FROM queries q WHERE q.session_id = s.id ORDER BY q.created_at DESC LIMIT 1) AS last_query
      FROM sessions s
      LEFT JOIN repositories r ON r.id = s.repository_id
-     ORDER BY s.last_active DESC LIMIT $1`,
-    [limit]
+     WHERE s.user_id = $1
+     ORDER BY s.last_active DESC LIMIT $2`,
+    [userId, limit]
   );
   return rows;
 }
 
-async function deleteSession(id) {
+async function deleteSession(id, userId) {
   if (!isUuid(id)) return false;
-  const { rowCount } = await query('DELETE FROM sessions WHERE id = $1', [id]);
+  const { rowCount } = await query('DELETE FROM sessions WHERE id = $1 AND user_id = $2', [id, userId]);
   return rowCount > 0;
+}
+
+/** Deletes every chat the user owns. @returns {Promise<number>} sessions removed */
+async function deleteUserSessions(userId) {
+  const { rowCount } = await query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+  return rowCount;
 }
 
 async function touchSession(id) {
@@ -81,10 +92,11 @@ async function logQuery({ sessionId, rawText, retrievedChunkIds = [], llmRespons
 }
 
 /** Attach/replace the answer on an already-logged question (e.g. when streaming finishes later). */
-async function updateQueryResponse(queryId, llmResponse) {
+async function updateQueryResponse(queryId, llmResponse, userId) {
   const { rows } = await query(
-    'UPDATE queries SET llm_response = $2::jsonb WHERE id = $1 RETURNING *',
-    [queryId, JSON.stringify(llmResponse)]
+    `UPDATE queries q SET llm_response = $2::jsonb
+     FROM sessions s WHERE q.id = $1 AND s.id = q.session_id AND s.user_id = $3 RETURNING q.*`,
+    [queryId, JSON.stringify(llmResponse), userId]
   );
   return rows[0] || null;
 }
@@ -121,6 +133,6 @@ async function logTurn({ sessionId, query: rawText, chunks = [], widget = null }
 }
 
 module.exports = {
-  isUuid, createSession, getSession, listSessions, listAllSessions, touchSession,
-  logQuery, updateQueryResponse, listQueries, logTurn, deleteSession
+  isUuid, createSession, getSession, listSessions, listUserSessions, touchSession,
+  logQuery, updateQueryResponse, listQueries, logTurn, deleteSession, deleteUserSessions
 };

@@ -4,9 +4,12 @@ Base URL: `http://localhost:3000` (or whatever `PORT` is). Request and response 
 Errors: `{ "error": "message" }` with a 4xx/5xx status, unless a section says otherwise.
 IDs (`repositoryId`, `jobId`, `sessionId`, `queryId`, `proposal_id`) are UUIDs. A malformed ID gets a `400`, and an unknown one gets a `404`.
 
+**Accounts:** every `/api` route needs a GitHub sign-in (`GET /auth/github`), except `/api/health`, `/api/auth/status`, `/api/fixtures` and `/api/webhooks/*`. Signed-out calls get `401 { "error": "unauthenticated" }`. Each user sees only the repositories they connected and the chats they started. Another user's repository, session, query or proposal ID returns `404`, as if it didn't exist. Repositories are indexed once per URL and shared behind the scenes, so connecting a repository someone else already indexed is instant.
+
 **Owners:** Gabriel owns everything in this file. Ethan owns `/api/query`, `/api/stream`, `/api/fixtures`, `/api/auth/status`, `/api/docs/*` and `/api/sessions/:id/history`, listed at the end.
 
 - [System](#system)
+- [Account](#account)
 - [Repositories & indexing](#repositories--indexing)
 - [GitHub webhook](#github-webhook)
 - [Sessions & query logging](#sessions--query-logging)
@@ -31,7 +34,23 @@ Always returns `200`. `status` is `ok` only when both Postgres and ChromaDB are 
   }
 }
 ```
-When a dependency is down it shows `{ "ok": false, "error": "..." }` instead.
+When a dependency is down it shows `{ "ok": false, "error": "..." }` instead. `chromadb.collection` is the collection for the active embedding model: vectors are stored in `code_chunks__<model>` (e.g. `code_chunks__huggingface-sentence-transformers-all-minilm-l6-v2`), because a Chroma collection only accepts one vector dimension. A repository whose vectors are missing from the active collection is rebuilt automatically the next time someone queries it.
+
+---
+
+## Account
+
+### `GET /api/me`
+The signed-in user: `{ id, login, name, avatarUrl, profileUrl, preferences, createdAt, lastLoginAt }`.
+
+### `PATCH /api/me/preferences`
+Body: any of `{ "showAgentActivity": bool, "autoOpenCanvas": bool, "defaultRepositoryId": string|null }`. Merges into the stored preferences and returns the user. Unknown keys get a `400`.
+
+### `DELETE /api/repos/:id`
+Removes the repository from the signed-in user's account. The shared index is kept for anyone else who connected it.
+
+### `DELETE /api/sessions` and `DELETE /api/sessions/:id`
+Delete all of the user's chats, or one chat. Returns `{ status: "ok", deleted }`.
 
 ---
 

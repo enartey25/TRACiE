@@ -1,7 +1,7 @@
 const axios = require('axios');
 const config = require('../../config/watsonx');
 const { getAuthHeaders, hasValidCredentials } = require('./auth');
-const { generateHFEmbedding, generateHFEmbeddings, hasHFCredentials } = require('../huggingface/embedding');
+const { generateHFEmbedding, generateHFEmbeddings, hasHFCredentials, DEFAULT_MODEL: DEFAULT_HF_MODEL } = require('../huggingface/embedding');
 const { getCachedEmbedding, setCachedEmbedding } = require('../rag/ragCache');
 
 /**
@@ -16,6 +16,19 @@ const { getCachedEmbedding, setCachedEmbedding } = require('../rag/ragCache');
 function getEmbeddingMode() {
   if (hasValidCredentials()) return 'watsonx';
   if (hasHFCredentials()) return 'huggingface';
+  return null;
+}
+
+/**
+ * Identity of the embedding model in use, e.g. "huggingface:sentence-transformers/all-MiniLM-L6-v2".
+ * Vectors from different models (or dimensions) can't share a Chroma collection, so
+ * db/chroma.js namespaces the collection by this key.
+ * @returns {string|null}
+ */
+function getEmbeddingModelKey() {
+  const mode = getEmbeddingMode();
+  if (mode === 'watsonx') return `watsonx:${config.embeddingModelId}`;
+  if (mode === 'huggingface') return `huggingface:${process.env.HF_EMBEDDING_MODEL || DEFAULT_HF_MODEL}`;
   return null;
 }
 
@@ -146,5 +159,6 @@ async function generateEmbeddings(texts, options = {}) {
 module.exports = {
   generateEmbedding,
   generateEmbeddings,
-  getEmbeddingMode
+  getEmbeddingMode,
+  getEmbeddingModelKey
 };

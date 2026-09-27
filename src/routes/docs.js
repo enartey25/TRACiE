@@ -3,6 +3,7 @@ const router = express.Router();
 const { executeRAGQuery } = require('../services/rag/pipeline');
 const dbProposals = require('../services/docs/proposalStore');
 const { isUuid } = require('../services/sessions/sessionStore');
+const { assertRepoAccess, assertProposalAccess } = require('../middleware/requireUser');
 
 // In-memory proposal store (fallback & bridge to PostgreSQL doc_proposals table)
 const proposalStore = new Map();
@@ -26,6 +27,7 @@ proposalStore.set('prop-101', {
  */
 router.post('/docs/generate', async (req, res) => {
   const { changedFiles = [], diffText = '', repoId = 'TRACiE' } = req.body || {};
+  if (isUuid(repoId) && (await assertRepoAccess(req, res, repoId)) === null) return;
 
   const query = diffText
     ? `Generate a documentation proposal and unified git diff for these changes:\n${diffText}`
@@ -86,6 +88,7 @@ router.get('/docs/proposals', async (req, res) => {
   const targetRepo = repoId || repositoryId;
 
   if (isUuid(targetRepo)) {
+    if ((await assertRepoAccess(req, res, targetRepo)) === null) return;
     try {
       const list = await dbProposals.listProposals(targetRepo, { status });
       return res.json({
@@ -116,9 +119,10 @@ const { executeProposalCommit } = require('../services/docs/gitCommitEngine');
 router.post('/docs/proposals/:id/approve', async (req, res) => {
   const proposalId = req.params.id;
   const note = req.body?.note;
-  const token = req.body?.token;
+  const token = req.user.accessToken || req.body?.token;
 
   if (isUuid(proposalId)) {
+    if (!(await assertProposalAccess(req, res, proposalId))) return;
     try {
       const { proposal, conflict } = await dbProposals.reviewProposal(proposalId, 'approved', note);
       if (conflict) {
@@ -158,6 +162,7 @@ router.post('/docs/proposals/:id/reject', async (req, res) => {
   const note = req.body?.note;
 
   if (isUuid(proposalId)) {
+    if (!(await assertProposalAccess(req, res, proposalId))) return;
     try {
       const { proposal, conflict } = await dbProposals.reviewProposal(proposalId, 'rejected', note);
       if (conflict) {

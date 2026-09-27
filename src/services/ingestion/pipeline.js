@@ -129,7 +129,12 @@ async function embedBatch(batch, jobId) {
 
 /** Decide which files need (re)indexing and clear out their stale chunks. */
 async function planIncremental({ repository, job, files, shas }) {
-  const previous = job.full_reindex ? new Map() : await repoStore.getIndexedFiles(repository.id);
+  let previous = job.full_reindex ? new Map() : await repoStore.getIndexedFiles(repository.id);
+  // indexed_files says these files are embedded, but the active collection has none of them
+  // (embedding model changed, or the collection was reset): rebuild from scratch.
+  if (previous.size > 0 && !(await chroma.hasRepositoryChunks(repository.id))) {
+    previous = new Map();
+  }
 
   if (previous.size === 0) {
     // First run, full rebuild, or pre-Phase-2 data without SHA tracking: start clean.
@@ -311,4 +316,21 @@ async function startIngestion(repository, { trigger = 'connect', full = false } 
   return job;
 }
 
-module.exports = { startIngestion, runJob };
+/**
+ * A repository marked 'ready' whose chunks are missing from the active Chroma collection
+ * (see db/chroma.js collectionName) can't answer anything. If that's the case, start a full
+ * rebuild and return the job; otherwise return null. Repos that legitimately produced no
+ * chunks (empty repos) are left alone so this can't loop.
+ */
+async function ensureSearchable(repository) {
+  if (repository.index_status !== 'ready') return null;
+  if (await chroma.hasRepositoryChunks(repository.id)) return null;
+  if (!(await repoStore.hasIndexedContent(repository.id))) return null;
+  const active = await repoStore.getActiveJob(repository.id);
+  if (active) return active;
+  console.log(`[ingestion] ${repository.name}: no vectors in collection ${chroma.collectionName()}; rebuilding`);
+  await repoStore.setRepositoryStatus(repository.id, 'indexing');
+  return startIngestion({ ...repository, index_status: 'indexing' }, { trigger: 'reindex', full: true });
+}
+
+module.exports = { startIngestion, runJob, ensureSearchable };

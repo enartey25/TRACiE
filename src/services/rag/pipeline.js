@@ -8,6 +8,7 @@ const { recordTurn, getFormattedHistoryForPrompt, getSessionHistory } = require(
 const { logTurn } = require('../sessions/sessionStore');
 const { detectExternalReferences, formatExternalReferencesForPrompt } = require('../enrichment/contextEnricher');
 const repoStore = require('../repos/repoStore');
+const userStore = require('../users/userStore');
 const {
   isFollowUpQuery,
   getCachedResponse,
@@ -36,7 +37,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * @param {Function} [params.onThought] - Callback for agent thoughts and streaming events.
  * @returns {Promise<object>} - Validated UI Widget JSON object.
  */
-async function executeRAGQuery({ query, repoId, repoName, sessionId, conversationHistory = [], requestedWidget, onThought }) {
+async function executeRAGQuery({ query, repoId, repoName, sessionId, userId, conversationHistory = [], requestedWidget, onThought }) {
   if (!query || typeof query !== 'string') {
     throw new Error('Query must be a non-empty string.');
   }
@@ -52,6 +53,12 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, conversatio
 
   // 1. If explicit UUID repoId was provided, look up repository metadata
   if (effectiveRepoId && UUID_RE.test(effectiveRepoId) && effectiveRepoId !== 'TRACiE') {
+    // Signed-in users may only query repositories linked to their account.
+    if (userId && (await userStore.getRepositoryRole(userId, effectiveRepoId)) === null) {
+      const error = new Error('That repository is not connected to your account.');
+      error.code = 'REPO_NOT_FOUND';
+      throw error;
+    }
     try {
       const repo = await repoStore.getRepository(effectiveRepoId);
       if (repo) {
@@ -62,7 +69,7 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, conversatio
   } else {
     // 2. No UUID repoId provided: inspect connected repositories in DB
     try {
-      const repos = await repoStore.listRepositories();
+      const repos = await repoStore.listRepositories(userId);
       if (repos && repos.length > 0) {
         // Check if query explicitly matches any connected repository name
         const matched = repos.find(r => r.name && qLower.includes(r.name.split('/')[1]?.toLowerCase() || r.name.toLowerCase()));
@@ -85,6 +92,17 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, conversatio
       }
     } catch {
       targetRepoName = 'TRACiE';
+    }
+  }
+
+  // 'ready' in Postgres but no vectors in the active collection: kick off a rebuild and
+  // report it as not ready, instead of answering from an empty index.
+  if (resolvedRepo) {
+    try {
+      const { ensureSearchable } = require('../ingestion/pipeline');
+      if (await ensureSearchable(resolvedRepo)) resolvedRepo = { ...resolvedRepo, index_status: 'indexing' };
+    } catch (error) {
+      console.warn('[rag] searchable check failed:', error.message);
     }
   }
 
