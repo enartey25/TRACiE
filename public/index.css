@@ -1908,6 +1908,72 @@ input {
   border-color: var(--dark);
 }
 
+/* Browser-voice mode: the transcript is the timeline */
+.w-audio-transcript {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.w-audio-transcript-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+
+.w-audio-transcript-label span {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+
+.w-audio-words {
+  position: relative;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.w-audio-word {
+  border-radius: 4px;
+  padding: 1px 1px;
+  margin: 0 -1px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+
+.w-audio-word:hover {
+  background: var(--accent-tint);
+  color: var(--dark);
+}
+
+.w-audio-word.is-read {
+  color: var(--muted);
+}
+
+.w-audio-word.is-current {
+  background: var(--dark);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w-audio-word { transition: none; }
+}
+
 /* ---- Overview / Architecture widget ---- */
 .w-overview-header {
   display: flex;

@@ -9,7 +9,9 @@ const axios = require('axios');
  */
 
 function getApiKey() {
-  return process.env.ELEVENLABS_API_KEY || '';
+  // Keys never contain whitespace; keep only the first token so stray pasted
+  // text or inline notes after the key don't cause a 401 "invalid_api_key".
+  return (process.env.ELEVENLABS_API_KEY || '').trim().split(/\s+/)[0].replace(/^["']|["']$/g, '');
 }
 
 function getVoiceId() {

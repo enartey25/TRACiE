@@ -2175,21 +2175,21 @@ function createWidget(w) {
 
 // ---- Audio player -----------------------------------------------
 function createAudioWidget(w) {
+  var audioUrl = w.audio_url || null;
+  // No MP3 (e.g. ElevenLabs unavailable): use the browser voice with a word-selectable transcript
+  if (!audioUrl && w.transcript && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    return createSpeechAudioWidget(w);
+  }
+
   var title     = w.title || 'Audio overview';
   var subtitle  = w.subtitle || w.description || '';
   var duration  = w.duration_seconds || 270;
   var elapsed   = 0;
   var speed     = w.speed || 1.25;
-  var audioUrl  = w.audio_url || null;
   var provider  = w.provider || (audioUrl ? 'ElevenLabs Studio Voice' : 'Web Speech API');
   var pct       = 0;
   var playing   = false;
-  var timer     = null;
   var audioEl   = audioUrl ? new Audio(audioUrl) : null;
-
-  // Web Speech API state (used when no audio_url is available)
-  var utterance = null;
-  var ttsSupported = !audioUrl && w.transcript && typeof window !== 'undefined' && 'speechSynthesis' in window;
 
   if (audioEl) {
     audioEl.playbackRate = speed;
@@ -2211,39 +2211,10 @@ function createAudioWidget(w) {
       updatePlayBtn();
       updateProgress();
     });
-  }
-
-  function buildUtterance() {
-    var u = new SpeechSynthesisUtterance(w.transcript);
-    u.rate = speed;
-    u.onstart = function() {
-      playing = true;
-      updatePlayBtn();
-      // Drive the progress bar with a timer since Web Speech has no timeupdate
-      timer = setInterval(function() {
-        if (elapsed < duration) {
-          elapsed += 0.5;
-        } else {
-          elapsed = duration;
-        }
-        pct = Math.min(100, Math.round((elapsed / duration) * 100));
-        updateProgress();
-      }, 500);
-    };
-    u.onend = function() {
-      playing = false;
-      elapsed = 0;
-      pct = 0;
-      clearInterval(timer);
-      updatePlayBtn();
-      updateProgress();
-    };
-    u.onerror = function() {
-      playing = false;
-      clearInterval(timer);
-      updatePlayBtn();
-    };
-    return u;
+    // Starting browser speech elsewhere should silence this MP3
+    document.addEventListener('tracie:tts-start', function() {
+      if (playing) { audioEl.pause(); playing = false; updatePlayBtn(); }
+    });
   }
 
   function fmtTime(s) {
@@ -2275,9 +2246,7 @@ function createAudioWidget(w) {
   function render() {
     var providerBadge = provider.includes('ElevenLabs')
       ? '<span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sage);background:#eef5f0;border-radius:12px;padding:2px 8px;margin-left:8px;">ElevenLabs</span>'
-      : (ttsSupported
-          ? '<span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;background:#f3f4f6;border-radius:12px;padding:2px 8px;margin-left:8px;">Web Speech</span>'
-          : '');
+      : '';
 
     div.innerHTML =
       '<div class="w-audio-header">' +
@@ -2310,41 +2279,14 @@ function createAudioWidget(w) {
     updatePlayBtn();
 
     div.querySelector('#audioPlayBtn').addEventListener('click', function() {
-      if (audioEl) {
-        // <audio> element path
-        playing = !playing;
-        updatePlayBtn();
-        if (playing) {
-          audioEl.play().catch(function(e) { console.warn('Audio play prevented:', e); });
-        } else {
-          audioEl.pause();
-        }
-      } else if (ttsSupported) {
-        // Web Speech API path
-        if (playing) {
-          // Pause
-          window.speechSynthesis.pause();
-          playing = false;
-          clearInterval(timer);
-          updatePlayBtn();
-        } else {
-          if (window.speechSynthesis.paused && utterance) {
-            // Resume a paused utterance
-            window.speechSynthesis.resume();
-            playing = true;
-            updatePlayBtn();
-            timer = setInterval(function() {
-              if (elapsed < duration) { elapsed += 0.5; } else { elapsed = duration; }
-              pct = Math.min(100, Math.round((elapsed / duration) * 100));
-              updateProgress();
-            }, 500);
-          } else {
-            // Start fresh
-            window.speechSynthesis.cancel();
-            utterance = buildUtterance();
-            window.speechSynthesis.speak(utterance);
-          }
-        }
+      if (!audioEl) return;
+      playing = !playing;
+      updatePlayBtn();
+      if (playing) {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        audioEl.play().catch(function(e) { console.warn('Audio play prevented:', e); });
+      } else {
+        audioEl.pause();
       }
     });
 
@@ -2367,20 +2309,7 @@ function createAudioWidget(w) {
       var idx = speeds.indexOf(speed);
       speed = speeds[(idx + 1) % speeds.length];
       this.textContent = speed + ' x';
-      if (audioEl) {
-        audioEl.playbackRate = speed;
-      } else if (ttsSupported && playing) {
-        // Restart with new rate — Web Speech has no live rate change
-        var charPos = utterance ? utterance.charIndex : 0;
-        window.speechSynthesis.cancel();
-        clearInterval(timer);
-        utterance = buildUtterance();
-        // Trim already-spoken text if possible to resume mid-transcript
-        if (charPos > 0 && w.transcript.length > charPos) {
-          utterance.text = w.transcript.slice(charPos);
-        }
-        window.speechSynthesis.speak(utterance);
-      }
+      if (audioEl) audioEl.playbackRate = speed;
     });
 
     div.querySelector('#audioTrack').addEventListener('click', function(e) {
@@ -2400,6 +2329,247 @@ function createAudioWidget(w) {
   }
 
   render();
+  return div;
+}
+
+// ---- Audio player: browser voice (Web Speech) ---------------------
+// There is no audio file to scrub, so the transcript itself is the timeline:
+// every word is clickable and reading starts from the chosen word.
+function createSpeechAudioWidget(w) {
+  var title    = w.title || 'Audio overview';
+  var subtitle = w.subtitle || w.description || '';
+  var speed    = w.speed || 1;
+  var speeds   = [0.75, 1, 1.25, 1.5, 2];
+  var synth    = window.speechSynthesis;
+  var widgetId = {};
+
+  // Spoken text: transcript without markdown markers, so the voice doesn't read "asterisk"
+  var text = String(w.transcript)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\*\*|__|`/g, '')
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+])\s+/gm, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .trim();
+
+  // Word tokens with their char offsets, grouped into sentences
+  var words = [];
+  var re = /\S+/g, m;
+  while ((m = re.exec(text))) words.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
+  var sentenceOf = [];
+  var sentenceStarts = [0];
+  words.forEach(function(wd, i) {
+    sentenceOf.push(sentenceStarts.length - 1);
+    var next = words[i + 1];
+    var breaksLine = next && /\n/.test(text.slice(wd.end, next.start));
+    if (next && (/[.!?]["')\]]*$/.test(wd.text) || breaksLine)) sentenceStarts.push(i + 1);
+  });
+
+  var total    = words.length;
+  var duration = w.duration_seconds || Math.round(total / 2.6);
+  var current  = -1;     // index of the word being read (or to resume from)
+  var playing  = false;
+  var token    = null;   // identifies the utterance this widget currently owns
+  var estTimer = null;   // estimates position for voices that don't emit word boundaries
+
+  var div = document.createElement('div');
+  div.className = 'w-card w-audio w-audio--speech';
+  div.innerHTML =
+    '<div class="w-audio-header">' +
+      '<div class="w-audio-meta">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">' +
+          '<h3 style="margin:0;">' + escapeHtml(title) + '</h3>' +
+          '<span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;background:#f3f4f6;border-radius:12px;padding:2px 8px;margin-left:8px;">Browser Voice</span>' +
+        '</div>' +
+        (subtitle ? '<p>' + escapeHtml(subtitle) + '</p>' : '') +
+      '</div>' +
+    '</div>' +
+
+    '<div class="w-audio-controls">' +
+      '<span class="w-audio-time" data-role="pos"></span>' +
+      '<div class="w-audio-track" data-role="track" title="Jump to this point">' +
+        '<div class="w-audio-fill" data-role="fill" style="width:0%"></div>' +
+      '</div>' +
+      '<span class="w-audio-time end" data-role="total"></span>' +
+      '<button class="w-audio-play-btn" data-role="play"></button>' +
+    '</div>' +
+
+    '<div class="w-audio-bottom">' +
+      '<button class="w-audio-skip" data-role="prev">&#x21BA; Sentence</button>' +
+      '<button class="w-audio-speed" data-role="speed">' + speed + ' x</button>' +
+      '<button class="w-audio-skip" data-role="next">Sentence &#x21BB;</button>' +
+    '</div>' +
+
+    '<div class="w-audio-transcript">' +
+      '<div class="w-audio-transcript-label">Spoken Transcript<span>Click any word to start reading from there</span></div>' +
+      '<div class="w-audio-words" data-role="words"></div>' +
+    '</div>';
+
+  function fmtTime(s) {
+    var m = Math.floor(s / 60);
+    var sec = Math.floor(s % 60);
+    return m + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+
+  var $ = function(role) { return div.querySelector('[data-role="' + role + '"]'); };
+  var wordsEl = $('words');
+
+  // Build the clickable transcript, keeping the original spacing and line breaks
+  var spans = [];
+  var cursor = 0;
+  words.forEach(function(wd, i) {
+    if (wd.start > cursor) wordsEl.appendChild(document.createTextNode(text.slice(cursor, wd.start)));
+    var span = document.createElement('span');
+    span.className = 'w-audio-word';
+    span.textContent = wd.text;
+    span.dataset.i = i;
+    wordsEl.appendChild(span);
+    spans.push(span);
+    cursor = wd.end;
+  });
+
+  wordsEl.addEventListener('click', function(e) {
+    var t = e.target.closest('.w-audio-word');
+    if (t) speakFrom(Number(t.dataset.i));
+  });
+
+  function setCurrent(i) {
+    if (current >= 0 && spans[current]) spans[current].classList.remove('is-current');
+    current = i;
+    spans.forEach(function(s, k) { s.classList.toggle('is-read', i >= 0 && k < i); });
+    if (i >= 0 && spans[i]) {
+      spans[i].classList.add('is-current');
+      // Keep the highlighted word in view inside the transcript box only
+      var top = spans[i].offsetTop - wordsEl.offsetTop;
+      if (top < wordsEl.scrollTop || top > wordsEl.scrollTop + wordsEl.clientHeight - 24) {
+        wordsEl.scrollTop = Math.max(0, top - wordsEl.clientHeight / 3);
+      }
+    }
+    var shown = Math.max(0, i);
+    $('pos').textContent = fmtTime(total ? (shown / total) * duration : 0);
+    $('fill').style.width = (total ? (shown / total) * 100 : 0) + '%';
+  }
+
+  function updatePlayBtn() {
+    $('play').innerHTML = playing
+      ? '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="2" width="4" height="10"/><rect x="8" y="2" width="4" height="10"/></svg> Pause'
+      : '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><polygon points="3,1 13,7 3,13"/></svg> ' + (current > 0 ? 'Resume' : 'Play');
+    div.classList.toggle('is-playing', playing);
+  }
+
+  function wordAt(charIndex) {
+    var lo = 0, hi = total - 1, ans = 0;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (words[mid].start <= charIndex) { ans = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    return ans;
+  }
+
+  function stop(resetToStart) {
+    token = null;
+    clearInterval(estTimer);
+    playing = false;
+    if (resetToStart) setCurrent(-1);
+    updatePlayBtn();
+  }
+
+  // Reads one sentence at a time (avoids Chrome cutting off long utterances), then chains on
+  function speakFrom(i) {
+    if (!total) return;
+    i = Math.max(0, Math.min(total - 1, i));
+    var myToken = {};
+    token = myToken;
+    clearInterval(estTimer);
+    synth.cancel();
+    document.dispatchEvent(new CustomEvent('tracie:tts-start', { detail: widgetId }));
+
+    var sIdx = sentenceOf[i];
+    var endWord = (sentenceStarts[sIdx + 1] || total) - 1;
+    var offset = words[i].start;
+    var u = new SpeechSynthesisUtterance(text.slice(offset, words[endWord].end));
+    u.rate = speed;
+    var gotBoundary = false;
+
+    u.onstart = function() {
+      if (token !== myToken) return;
+      // Fallback: estimate progress (~2.6 words/sec at 1x) until real boundary events arrive
+      var startedAt = Date.now();
+      estTimer = setInterval(function() {
+        if (token !== myToken || gotBoundary) return clearInterval(estTimer);
+        var est = i + Math.floor(((Date.now() - startedAt) / 1000) * 2.6 * speed);
+        setCurrent(Math.min(endWord, est));
+      }, 150);
+    };
+    u.onboundary = function(e) {
+      if (token !== myToken || (e.name && e.name !== 'word')) return;
+      gotBoundary = true;
+      setCurrent(wordAt(offset + e.charIndex));
+    };
+    u.onend = function() {
+      if (token !== myToken) return;
+      clearInterval(estTimer);
+      if (!div.isConnected) return stop(false);
+      if (endWord + 1 < total) speakFrom(endWord + 1);
+      else stop(true);
+    };
+    u.onerror = function(e) {
+      if (token !== myToken || e.error === 'interrupted' || e.error === 'canceled') return;
+      console.warn('Speech synthesis error:', e.error);
+      stop(false);
+    };
+
+    playing = true;
+    setCurrent(i);
+    updatePlayBtn();
+    synth.speak(u);
+  }
+
+  // Another audio widget started speaking: release this one
+  document.addEventListener('tracie:tts-start', function(e) {
+    if (e.detail !== widgetId && playing) stop(false);
+  });
+
+  $('play').addEventListener('click', function() {
+    if (playing) {
+      // Cancel instead of pause(): pause/resume is unreliable across browsers, and resuming
+      // from the current word gives the same result
+      synth.cancel();
+      stop(false);
+    } else {
+      speakFrom(Math.max(0, current));
+    }
+  });
+
+  $('prev').addEventListener('click', function() {
+    var s = sentenceOf[Math.max(0, current)] || 0;
+    // Mid-sentence goes to the start of this sentence, otherwise the previous one
+    var target = (current > sentenceStarts[s] + 1) ? sentenceStarts[s] : sentenceStarts[Math.max(0, s - 1)];
+    if (playing) speakFrom(target); else setCurrent(target);
+  });
+
+  $('next').addEventListener('click', function() {
+    var s = current < 0 ? -1 : sentenceOf[current];
+    var target = sentenceStarts[s + 1];
+    if (target == null) return;
+    if (playing) speakFrom(target); else setCurrent(target);
+  });
+
+  $('speed').addEventListener('click', function() {
+    speed = speeds[(speeds.indexOf(speed) + 1) % speeds.length];
+    this.textContent = speed + ' x';
+    if (playing) speakFrom(current); // Web Speech can't change rate mid-utterance
+  });
+
+  $('track').addEventListener('click', function(e) {
+    var rect = e.currentTarget.getBoundingClientRect();
+    var ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    var target = Math.min(total - 1, Math.floor(ratio * total));
+    if (playing) speakFrom(target); else setCurrent(target);
+  });
+
+  $('total').textContent = fmtTime(duration);
+  setCurrent(-1);
+  updatePlayBtn();
   return div;
 }
 
