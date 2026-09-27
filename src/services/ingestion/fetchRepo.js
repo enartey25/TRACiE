@@ -92,7 +92,7 @@ async function cloneRepository({ url, token, jobId }) {
 async function listBlobShas(dir) {
   const out = await simpleGit(dir).raw(['ls-tree', '-r', '-z', 'HEAD']);
   const shas = new Map();
-  for (const entry of out.split('\\0')) {
+  for (const entry of out.split('\0')) {
     // "<mode> blob <sha>	<path>"
     const tab = entry.indexOf('	');
     if (tab < 0) continue;

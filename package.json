@@ -4,13 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node --liftoff-only src/server.js",
     "test": "node src/scripts/test-rag-pipeline.js",
     "test:auth": "node src/scripts/test-watsonx-auth.js",
     "test:rag": "node src/scripts/test-rag-pipeline.js",
     "db:migrate": "node src/db/migrate.js",
     "chroma": "python -c \"import sys;from chromadb.cli.cli import app;sys.argv[0]='chroma';app()\" run --path ./chroma_data --port 8000",
-    "test:ingest": "node src/scripts/test-ingestion.js",
+    "test:ingest": "node --liftoff-only src/scripts/test-ingestion.js",
     "test:webhook": "node src/scripts/test-webhook.js",
     "test:learning": "node src/scripts/test-phase2-learning.js",
     "test:docgen": "node src/scripts/test-phase2-docgen.js"

@@ -36,10 +36,10 @@ const config = {
     maxChunkLines: parseInt(process.env.INGEST_MAX_CHUNK_LINES, 10) || 60,
     maxFileBytes: parseInt(process.env.INGEST_MAX_FILE_BYTES, 10) || 300 * 1024,
     // Chunks handed to the embedding provider per pipeline iteration. For HuggingFace this is
-    // split further into DEFAULT_BATCH_SIZE (32) requests run DEFAULT_CONCURRENCY (4) at a time
-    // (see services/huggingface/embedding.js) — 128 here means 4 of those requests fully in
-    // flight per iteration instead of 1, which is where the actual speedup comes from.
-    embedBatchSize: parseInt(process.env.INGEST_EMBED_BATCH_SIZE, 10) || 128,
+    // split further into DEFAULT_BATCH_SIZE (32) requests run DEFAULT_CONCURRENCY (16) at a time
+    // (see services/huggingface/embedding.js) — 512 here keeps all 16 of those requests in
+    // flight per iteration. Keep it = 32 x HF_EMBED_CONCURRENCY if you change either.
+    embedBatchSize: parseInt(process.env.INGEST_EMBED_BATCH_SIZE, 10) || 512,
     workDir: process.env.INGEST_WORK_DIR || ''
   }
 };

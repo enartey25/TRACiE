@@ -13,6 +13,10 @@ const Parser = require('web-tree-sitter');
  *     falls back to fixed line windows with a small overlap.
  *
  * Line numbers in the output are 1-based and inclusive.
+ *
+ * Run node with --liftoff-only (see package.json scripts): V8's background TurboFan tier-up
+ * of large grammars (e.g. tree-sitter-swift.wasm) dies with "Fatal process out of memory: Zone",
+ * killing the whole server. It is a startup-only flag: v8.setFlagsFromString and NODE_OPTIONS don't work.
  */
 
 // metadata language label -> tree-sitter-wasms grammar name

@@ -88,23 +88,39 @@ async function buildChunks({ repositoryId, files, jobId }) {
   return { chunks, emptyFiles };
 }
 
-/** Embed a batch; if the batch call fails, retry one-by-one so one bad chunk can't sink the batch. */
+const RETRY_GROUP_SIZE = 32;
+
+async function embedInto(chunks) {
+  const vectors = await embedTexts(chunks.map(embeddingInput));
+  if (vectors.length !== chunks.length) throw new Error(`expected ${chunks.length} vectors, got ${vectors.length}`);
+  chunks.forEach((c, i) => { c.embedding = vectors[i]; });
+}
+
+/**
+ * Embed a batch; if the batch call fails, retry in small groups, then one-by-one within a
+ * failing group, so one bad chunk can't sink the batch. Never rejects.
+ */
 async function embedBatch(batch, jobId) {
   try {
-    const vectors = await embedTexts(batch.map(embeddingInput));
-    if (vectors.length !== batch.length) throw new Error(`expected ${batch.length} vectors, got ${vectors.length}`);
-    batch.forEach((c, i) => { c.embedding = vectors[i]; });
+    await embedInto(batch);
     return { ok: batch, failed: 0 };
   } catch (batchError) {
-    log(jobId, `batch embed failed (${batchError.message}); retrying individually`);
+    log(jobId, `batch embed failed (${batchError.message}); retrying in groups of ${RETRY_GROUP_SIZE}`);
     const ok = [];
-    for (const c of batch) {
+    for (let i = 0; i < batch.length; i += RETRY_GROUP_SIZE) {
+      const group = batch.slice(i, i + RETRY_GROUP_SIZE);
       try {
-        const [vector] = await embedTexts([embeddingInput(c)]);
-        c.embedding = vector;
-        ok.push(c);
-      } catch (error) {
-        log(jobId, `embed failed for ${c.chunkId}: ${error.message}`);
+        await embedInto(group);
+        ok.push(...group);
+        continue;
+      } catch (_) { /* fall through to one-by-one */ }
+      for (const c of group) {
+        try {
+          await embedInto([c]);
+          ok.push(c);
+        } catch (error) {
+          log(jobId, `embed failed for ${c.chunkId}: ${error.message}`);
+        }
       }
     }
     return { ok, failed: batch.length - ok.length };
@@ -203,9 +219,16 @@ async function runJob({ repository, job, token }) {
     let done = 0;
     let failed = 0;
     const batchSize = config.ingestion.embedBatchSize;
+    // Pipelined: the next batch is embedding (network-bound) while this one is being stored.
+    // embedBatch never rejects, so an in-flight prefetch can't become an unhandled rejection.
+    let nextEmbedding = chunks.length ? embedBatch(chunks.slice(0, batchSize), jobId) : null;
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
-      const result = await embedBatch(batch, jobId);
+      const result = await nextEmbedding;
+      const nextStart = i + batchSize;
+      nextEmbedding = nextStart < chunks.length
+        ? embedBatch(chunks.slice(nextStart, nextStart + batchSize), jobId)
+        : null;
       await chroma.upsertChunks(result.ok);
       const okIds = new Set(result.ok.map(c => c.chunkId));
 

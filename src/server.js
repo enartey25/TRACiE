@@ -1,3 +1,14 @@
+// Tree-sitter's large WASM grammars (e.g. Swift) crash V8's TurboFan tier-up with a fatal
+// "out of memory: Zone" during ingestion. --liftoff-only prevents it, but it's a startup-only
+// flag, so if we were launched without it (plain `node src/server.js`, IDE, nodemon), relaunch.
+if (require.main === module && !process.execArgv.includes('--liftoff-only')) {
+  const { spawn } = require('child_process');
+  const child = spawn(process.execPath, ['--liftoff-only', ...process.execArgv, __filename, ...process.argv.slice(2)], { stdio: 'inherit' });
+  ['SIGINT', 'SIGTERM'].forEach(sig => process.on(sig, () => child.kill(sig)));
+  child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
+  return;
+}
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
