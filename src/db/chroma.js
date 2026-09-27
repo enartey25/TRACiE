@@ -202,7 +202,40 @@ async function getRepositoryChunks({ repositoryId, chunkTypes, limit = 15 }) {
   });
 }
 
+/**
+ * Fetch every stored chunk for specific files in a repository (exact file_path match).
+ * Used to force-include a file's content when the user names it explicitly in their
+ * query, since semantic top-K can rank a short/administrative file (e.g. README.md)
+ * below unrelated code when the query's wording doesn't closely match its content.
+ */
+async function getChunksByFilePath({ repositoryId, filePaths, limit = 20 }) {
+  if (!filePaths || !filePaths.length) return [];
+  const collection = await getCollection();
+  const result = await collection.get({
+    where: { $and: [{ repository_id: repositoryId }, { file_path: { $in: filePaths } }] },
+    limit,
+    include: ['documents', 'metadatas']
+  });
+
+  const ids = result.ids || [];
+  return ids.map((id, i) => {
+    const metadata = (result.metadatas || [])[i] || {};
+    return {
+      chunk_id: id,
+      chunk_type: metadata.chunk_type || 'code',
+      content: (result.documents || [])[i] || '',
+      file_path: metadata.file_path,
+      language: metadata.language,
+      start_line: metadata.start_line,
+      end_line: metadata.end_line,
+      module_name: metadata.module_name,
+      distance: 0,
+      metadata
+    };
+  });
+}
+
 module.exports = {
   getClient, getCollection, ping, upsertChunks, deleteRepositoryChunks, deleteFileChunks, deleteWhere,
-  getExisting, queryChunks, getRepositoryChunks
+  getExisting, queryChunks, getRepositoryChunks, getChunksByFilePath
 };

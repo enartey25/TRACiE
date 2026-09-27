@@ -50,11 +50,19 @@ async function cloneRepository({ url, token, jobId }) {
     : `${parsed.url}.git`;
 
   // GIT_TERMINAL_PROMPT=0: fail fast on private repos instead of hanging on a credential prompt.
-  // simple-git v4 rejects env containing EDITOR/PAGER/GIT_* overrides, so pass a filtered copy.
+  // GIT_LFS_SKIP_SMUDGE=1: avoid failing clones when repos contain Git LFS pointers (e.g. binary docs/zip/models).
+  // simple-git v4 rejects env containing EDITOR/PAGER/GIT_* overrides unless in allowEnvironment.
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([k]) => !/^(EDITOR|VISUAL|PAGER|GIT_.*)$/i.test(k))
   );
-  const git = simpleGit({ timeout: { block: 120000 }, allowEnvironment: ['GIT_TERMINAL_PROMPT'] }).env({ ...env, GIT_TERMINAL_PROMPT: '0' });
+  const git = simpleGit({
+    timeout: { block: 120000 },
+    allowEnvironment: ['GIT_TERMINAL_PROMPT', 'GIT_LFS_SKIP_SMUDGE']
+  }).env({
+    ...env,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_LFS_SKIP_SMUDGE: '1'
+  });
   try {
     await git.clone(remote, dir, ['--depth', '1', '--single-branch', '--no-tags']);
   } catch (error) {

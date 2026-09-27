@@ -47,7 +47,7 @@ async function main() {
     await chroma.upsertChunks(chunks);
     console.log(`Upserted into ChromaDB (dim=${vectors[0].length}) in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
-    // Query with an exact chunk's text: with any embedding (even mock) it must come back first.
+    // Query with an exact chunk's text: it must come back first.
     const probe = chunks[Math.floor(chunks.length / 2)];
     const hits = await chroma.queryChunks({ embedding: await embedText(probe.text), repositoryId, topK: 3 });
     console.log('Top hits:', hits.map(h => `${h.file_path}:${h.start_line}-${h.end_line} (d=${h.distance.toFixed(3)})`));

@@ -1,32 +1,36 @@
 const axios = require('axios');
 const config = require('../../config/watsonx');
 const { getAuthHeaders, hasValidCredentials } = require('./auth');
-
-/**
- * Generates a deterministic mock embedding vector (normalized float array)
- * for testing when live watsonx credentials are not supplied.
- */
-function generateMockEmbedding(text, dimensions = 768) {
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash << 5) - hash + text.charCodeAt(i);
-    hash |= 0;
-  }
-  const vector = [];
-  let sumSq = 0;
-  for (let i = 0; i < dimensions; i++) {
-    const val = Math.sin(hash + i);
-    vector.push(val);
-    sumSq += val * val;
-  }
-  const norm = Math.sqrt(sumSq) || 1;
-  return vector.map(v => v / norm);
-}
-
+const { generateHFEmbedding, generateHFEmbeddings, hasHFCredentials } = require('../huggingface/embedding');
 const { getCachedEmbedding, setCachedEmbedding } = require('../rag/ragCache');
 
 /**
- * Generates a vector embedding for a single text string using IBM watsonx.ai.
+ * Provider priority for embeddings (ingestion AND query MUST use the same one,
+ * otherwise retrieval silently returns garbage):
+ *   1. watsonx.ai   - if WATSONX_APIKEY/WATSONX_PROJECT_ID are set
+ *   2. HuggingFace  - if HF_TOKEN is set (real semantic vectors, free tier)
+ * There is no mock/deterministic fallback: with neither configured, embedding
+ * calls fail loudly instead of silently storing/querying meaningless vectors.
+ * @returns {'watsonx'|'huggingface'}
+ */
+function getEmbeddingMode() {
+  if (hasValidCredentials()) return 'watsonx';
+  if (hasHFCredentials()) return 'huggingface';
+  return null;
+}
+
+function requireProvider() {
+  const mode = getEmbeddingMode();
+  if (!mode) {
+    throw new Error(
+      'No embedding provider configured. Set WATSONX_APIKEY + WATSONX_PROJECT_ID, or HF_TOKEN, in .env.'
+    );
+  }
+  return mode;
+}
+
+/**
+ * Generates a vector embedding for a single text string.
  * @param {string} text - The input text to embed.
  * @param {object} [options] - Optional overrides (modelId, projectId).
  * @returns {Promise<number[]>} - Dense vector of floating point numbers.
@@ -40,10 +44,12 @@ async function generateEmbedding(text, options = {}) {
   const cached = getCachedEmbedding(text);
   if (cached) return cached;
 
-  if (!hasValidCredentials()) {
-    const mock = generateMockEmbedding(text);
-    setCachedEmbedding(text, mock);
-    return mock;
+  const mode = requireProvider();
+
+  if (mode === 'huggingface') {
+    const vector = await generateHFEmbedding(text, options);
+    setCachedEmbedding(text, vector);
+    return vector;
   }
 
   const headers = await getAuthHeaders();
@@ -69,7 +75,9 @@ async function generateEmbedding(text, options = {}) {
       response.data.results[0] &&
       response.data.results[0].embedding
     ) {
-      return response.data.results[0].embedding;
+      const vector = response.data.results[0].embedding;
+      setCachedEmbedding(text, vector);
+      return vector;
     }
 
     throw new Error('Unexpected response structure from watsonx.ai embedding endpoint.');
@@ -91,8 +99,10 @@ async function generateEmbeddings(texts, options = {}) {
     return [];
   }
 
-  if (!hasValidCredentials()) {
-    return texts.map(t => generateMockEmbedding(t));
+  const mode = requireProvider();
+
+  if (mode === 'huggingface') {
+    return generateHFEmbeddings(texts, options);
   }
 
   const batchSize = options.batchSize || 16;
@@ -136,5 +146,5 @@ async function generateEmbeddings(texts, options = {}) {
 module.exports = {
   generateEmbedding,
   generateEmbeddings,
-  generateMockEmbedding
+  getEmbeddingMode
 };

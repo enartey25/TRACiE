@@ -1,7 +1,8 @@
 const axios = require('axios');
 const config = require('../../config/watsonx');
 const { generateEmbedding } = require('../watsonx/embedding');
-const { queryChunks } = require('../../db/chroma');
+const { queryChunks, getChunksByFilePath } = require('../../db/chroma');
+const repoStore = require('../repos/repoStore');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -218,6 +219,59 @@ async function getIamToken() {
 ];
 
 /**
+ * Filenames the user named explicitly in their query (e.g. "README", "AGENTS.md").
+ * Extension-based tokens are matched literally; bare "readme" is special-cased since
+ * people rarely type its extension. Callers must still verify a match exists among the
+ * repo's actually-indexed files before trusting it — this only proposes candidates.
+ */
+function extractFilenameMentions(query) {
+  if (!query || typeof query !== 'string') return [];
+  const candidates = new Set();
+  (query.match(/\b[\w-]+\.[A-Za-z]{1,10}\b/g) || []).forEach(m => candidates.add(m.toLowerCase()));
+  if (/\breadme\b/i.test(query)) candidates.add('readme');
+  return [...candidates];
+}
+
+/**
+ * When the query names specific files, force their chunks into the result set instead of
+ * trusting semantic rank alone. Short/administrative files (README.md, AGENTS.md, ...) can
+ * embed weakly against code-heavy content, so a comparison question like "what's the
+ * difference between the README and AGENTS.md" can lose one of the two named files to
+ * unrelated higher-ranked chunks — grounding only half the answer, or none of it.
+ */
+async function boostExplicitFileMentions({ query, repoId, hits }) {
+  if (!UUID_RE.test(repoId || '')) return hits; // only for real connected repos (indexed_files-backed)
+  const mentions = extractFilenameMentions(query);
+  if (!mentions.length) return hits;
+
+  let indexed;
+  try {
+    indexed = await repoStore.getIndexedFiles(repoId); // Map: file_path -> blob_sha
+  } catch (_) {
+    return hits;
+  }
+  if (!indexed || indexed.size === 0) return hits;
+
+  const alreadyCovered = new Set(hits.map(h => h.file_path));
+  const matchedPaths = [];
+  for (const filePath of indexed.keys()) {
+    if (alreadyCovered.has(filePath) || matchedPaths.length >= 3) continue;
+    const base = filePath.slice(filePath.lastIndexOf('/') + 1).toLowerCase();
+    const baseNoExt = base.slice(0, base.lastIndexOf('.')) || base;
+    if (mentions.includes(base) || mentions.includes(baseNoExt)) matchedPaths.push(filePath);
+  }
+  if (!matchedPaths.length) return hits;
+
+  try {
+    const forced = await getChunksByFilePath({ repositoryId: repoId, filePaths: matchedPaths, limit: matchedPaths.length * 3 });
+    return [...forced, ...hits];
+  } catch (error) {
+    console.warn('[retriever] explicit file-mention boost failed:', error.message);
+    return hits;
+  }
+}
+
+/**
  * Retrieves the top-k most relevant code chunks for a given query vector.
  * Queries ChromaDB when operational; falls back to embedded repository chunks with smart keyword matching.
  *
@@ -228,7 +282,12 @@ async function getIamToken() {
  * @param {number} [params.topK=5] - Number of chunks to retrieve.
  * @returns {Promise<Array<object>>} - List of relevant code chunk objects.
  */
-async function retrieveCodeChunks({ query, queryEmbedding, repoId, topK = 5, chunkTypes }) {
+async function retrieveCodeChunks(params) {
+  const hits = await retrieveCodeChunksRanked(params);
+  return boostExplicitFileMentions({ query: params.query, repoId: params.repoId, hits });
+}
+
+async function retrieveCodeChunksRanked({ query, queryEmbedding, repoId, topK = 5, chunkTypes }) {
   const wantsHistory = query && typeof query === 'string' && /\b(commit|pr|pull request|history|author|who changed|merged|recent changes)\b/i.test(query);
   const typesToQuery = chunkTypes || (wantsHistory ? ['code', 'commit', 'pull_request'] : ['code']);
   const isTracieRepo = !repoId || repoId === 'TRACiE' || (typeof query === 'string' && query.toLowerCase().includes('tracie'));

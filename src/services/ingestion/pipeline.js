@@ -8,6 +8,7 @@ const { ingestHistory, describeGitHubError } = require('./history');
 const chroma = require('../../db/chroma');
 const repoStore = require('../repos/repoStore');
 const { decrypt } = require('../../utils/crypto');
+const { getEmbeddingMode } = require('../watsonx/embedding');
 
 /**
  * Repository ingestion pipeline:
@@ -164,7 +165,12 @@ async function runJob({ repository, job, token }) {
     await repoStore.updateJob(jobId, { status: 'running', stage: 'cloning' });
     // A re-index of an already-searchable repo keeps it 'ready' so chat keeps working meanwhile.
     if (repository.index_status !== 'ready') await repoStore.setRepositoryStatus(repository.id, 'indexing');
+    const embeddingMode = getEmbeddingMode();
+    if (!embeddingMode) {
+      throw new Error('No embedding provider configured. Set WATSONX_APIKEY + WATSONX_PROJECT_ID, or HF_TOKEN, in .env.');
+    }
     log(jobId, `cloning ${repository.url} (trigger=${job.trigger}${job.full_reindex ? ', full' : ''})`);
+    log(jobId, `embedding via ${embeddingMode === 'huggingface' ? 'HuggingFace Inference API' : 'watsonx.ai'}.`);
 
     const clone = await cloneRepository({ url: repository.url, token, jobId });
     cleanup = clone.cleanup;

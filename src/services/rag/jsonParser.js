@@ -73,21 +73,42 @@ function parseAndValidateWidgetJSON(rawText, fallbackContext = {}) {
     return 0;
   }
 
+  // Some models (observed with Groq's gpt-oss-120b on Mermaid output specifically — plain
+  // prose/code fields from the same model come through fine) double-escape control characters
+  // inside the DSL string: the JSON value ends up containing literal "\" + "n" / "\" + '"'
+  // instead of a real line break / quote. Mermaid requires real newlines between statements and
+  // real quotes around labels, and neither literal sequence has a legitimate use in diagram
+  // source, so unescaping is always safe once we've detected the pattern.
+  function unescapeDiagramSource(s) {
+    if (typeof s !== 'string' || !s.includes('\\n') || s.includes('\n')) return s;
+    return s.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\t/g, '  ').replace(/\\"/g, '"');
+  }
+
   function normalizeWidget(obj) {
     if (!obj || typeof obj !== 'object') return null;
 
     // Detect any diagram-like object by checking all known DSL field aliases
-    const dslValue = obj.diagram_source || obj.mermaidcode || obj.mermaidCode || obj.mermaid_code ||
-      obj.diagramSource || obj.diagram || obj.dsl || obj.flowchart || obj.code || '';
+    const MERMAID_START = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph|journey|C4Context)\b/;
+    const dslValue = unescapeDiagramSource(obj.diagram_source || obj.mermaidcode || obj.mermaidCode || obj.mermaid_code ||
+      obj.diagramSource || obj.mermaid || obj.diagram || obj.dsl || obj.flowchart || obj.code || '');
     const isDiagram = obj.diagramtype || obj.diagram_type || obj.diagramType ||
       obj.mermaidcode || obj.mermaidCode || obj.mermaid_code ||
       (typeof obj.diagram_source === 'string') ||
-      (typeof obj.diagram === 'string' && /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph|journey|C4Context)\b/.test(obj.diagram.trim())) ||
+      (typeof obj.mermaid === 'string' && MERMAID_START.test(obj.mermaid.trim())) ||
+      (typeof obj.diagram === 'string' && MERMAID_START.test(obj.diagram.trim())) ||
       obj.type === 'flowchart' || obj.type === 'diagram' || obj.type === 'architecture_diagram';
 
     if (isDiagram) {
       obj.type = 'architecture_diagram';
       obj.diagram_source = dslValue;
+    }
+
+    // Models sometimes ignore the "type"/"content" field names from the prompt and answer
+    // under a plain "answer" or "response" key instead. Rescue that into chat_response
+    // rather than falling through to dumping the raw JSON text as the chat message.
+    if (!obj.type && typeof (obj.answer || obj.response) === 'string') {
+      obj.type = 'chat_response';
+      obj.content = obj.answer || obj.response;
     }
 
     if (obj.type === 'quiz') {

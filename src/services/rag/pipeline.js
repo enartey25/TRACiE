@@ -1,4 +1,4 @@
-const { generateEmbedding } = require('../watsonx/embedding');
+const { generateEmbedding, getEmbeddingMode } = require('../watsonx/embedding');
 const { generateText } = require('../watsonx/generator');
 const { retrieveCodeChunks } = require('./retriever');
 const { buildRAGPrompt } = require('../../prompts/promptTemplates');
@@ -47,6 +47,7 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, conversatio
   // -- Step -1: Resolve Target Repository ------------------------------------
   let effectiveRepoId = repoId;
   let targetRepoName = repoName || 'the repository';
+  let resolvedRepo = null;
   const qLower = query.toLowerCase();
 
   // 1. If explicit UUID repoId was provided, look up repository metadata
@@ -55,6 +56,7 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, conversatio
       const repo = await repoStore.getRepository(effectiveRepoId);
       if (repo) {
         targetRepoName = repo.name || targetRepoName;
+        resolvedRepo = repo;
       }
     } catch {}
   } else {
@@ -67,10 +69,12 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, conversatio
         if (matched) {
           effectiveRepoId = matched.id;
           targetRepoName = matched.name;
+          resolvedRepo = matched;
         } else if (!qLower.includes('tracie')) {
           // If query does not explicitly ask for TRACiE, default to the user's connected repository
           effectiveRepoId = repos[0].id;
           targetRepoName = repos[0].name;
+          resolvedRepo = repos[0];
         } else {
           targetRepoName = 'TRACiE';
         }
@@ -82,6 +86,21 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, conversatio
     } catch {
       targetRepoName = 'TRACiE';
     }
+  }
+
+  // A repository that has never finished a successful index has no searchable chunks yet.
+  // Once it's 'ready' it stays queryable even while a later re-index runs in the background.
+  if (resolvedRepo && resolvedRepo.index_status !== 'ready') {
+    const status = resolvedRepo.index_status || 'pending';
+    const error = new Error(
+      status === 'failed'
+        ? `"${targetRepoName}" failed to index and has no searchable code yet. Re-index it before querying.`
+        : `"${targetRepoName}" is still indexing (${status}) — please wait for it to finish before querying.`
+    );
+    error.code = 'REPO_NOT_READY';
+    error.repositoryId = resolvedRepo.id;
+    error.indexStatus = status;
+    throw error;
   }
 
   const cacheKey = targetRepoName ? `${effectiveRepoId || 'repo'}::${targetRepoName}` : (effectiveRepoId || 'TRACiE');
@@ -234,6 +253,7 @@ async function executeRAGQuery({ query, repoId, repoName, sessionId, conversatio
     chunksRetrieved: (chunks || []).length,
     externalRefsMatched: (externalRefs || []).length,
     provider: provider,
+    embeddingMode: getEmbeddingMode(),
     executionTimeMs: Date.now() - startTime,
     timestamp: new Date().toISOString()
   };

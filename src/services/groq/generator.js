@@ -31,7 +31,12 @@ async function generateGroqCompletion({ prompt, systemPrompt, model, jsonMode = 
   if (systemPrompt) {
     messages.push({ role: 'system', content: systemPrompt });
   }
-  const trimmedPrompt = (prompt && prompt.length > 9000) ? (prompt.slice(0, 9000) + '\n\n[Context truncated to adhere to TPM rate limits]') : prompt;
+  // Prompt builders put retrieved context first and end with "USER QUERY: ...". Truncating
+  // from the front (old behaviour) can cut the query itself off entirely, leaving the model
+  // with only context and no question to answer. Keep the tail instead so the query always survives.
+  const trimmedPrompt = (prompt && prompt.length > 9000)
+    ? ('[Earlier context truncated to adhere to TPM rate limits]\n\n' + prompt.slice(-9000))
+    : prompt;
   messages.push({ role: 'user', content: trimmedPrompt });
 
   const options = {
@@ -70,10 +75,17 @@ async function generateGroqCompletion({ prompt, systemPrompt, model, jsonMode = 
         }
       }
     } else if (err.message && err.message.includes('json_validate_failed')) {
-      console.warn(`[Groq] json_validate_failed on ${targetModel}: retrying without strict json_object constraint...`);
-      const fallbackOptions = { ...options };
-      delete fallbackOptions.response_format;
-      completion = await client.chat.completions.create(fallbackOptions);
+      console.warn(`[Groq] json_validate_failed on ${targetModel}: retrying once at temperature 0 (still JSON mode)...`);
+      try {
+        completion = await client.chat.completions.create({ ...options, temperature: 0 });
+      } catch (retryErr) {
+        // Dropping response_format is a last resort: without it the model isn't constrained
+        // to JSON at all, so its output is more likely to be unusable free text.
+        console.warn(`[Groq] retry also failed json validation: falling back without strict json_object constraint...`);
+        const fallbackOptions = { ...options };
+        delete fallbackOptions.response_format;
+        completion = await client.chat.completions.create(fallbackOptions);
+      }
     } else {
       throw err;
     }

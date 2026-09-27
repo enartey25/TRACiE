@@ -1,5 +1,8 @@
 /* Generic text cards for content types with no bespoke design.
- * payload: { body: markdown, points?: string[] }                                     */
+ * payload: { body: markdown, points?: string[] }
+ * chat_response's schema-defined field is actually `content` (see
+ * src/contracts/responseSchema.json), not `body` — accept both so the
+ * widget renders regardless of which one the backend/LLM used.        */
 (function () {
   const LABELS = {
     chat_response: 'Chat response',
@@ -15,7 +18,7 @@
     label: LABELS[type],
     render(p, { h, safeMarkdown }) {
       return h('div', { class: `uir-text uir-text--${type}` },
-        safeMarkdown(p.body),
+        safeMarkdown(p.body != null ? p.body : p.content),
         Array.isArray(p.points) && p.points.length
           ? h('ul', { class: 'uir-points' }, p.points.map((x) => h('li', null, x))) : null);
     },

@@ -60,3 +60,80 @@
   line-height: 1.6;
   margin: 8px 0 0;
 }
+
+/* ── directory_tree — full recursive tree (file_tree schema shape) ─────────── */
+
+.uir-tree {
+  border: 1px solid var(--uir-line);
+  border-radius: var(--uir-radius-sm);
+  background: var(--uir-card);
+  padding: 4px 0;
+  font-family: var(--uir-mono);
+  font-size: 0.875rem;
+}
+
+.uir-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--uir-radius-sm);
+  transition: background 0.15s ease;
+}
+
+.uir-tree__row:hover {
+  background: var(--uir-sage-tint);
+}
+
+.uir-tree__row--root {
+  font-family: var(--uir-sans);
+  font-weight: 700;
+  color: var(--uir-text);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--uir-line);
+  border-radius: 0;
+}
+
+.uir-tree__row--root:hover {
+  background: transparent;
+}
+
+.uir-tree__icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--uir-teal);
+}
+
+.uir-tree__name {
+  color: var(--uir-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uir-tree__desc {
+  font-family: var(--uir-sans);
+  color: var(--uir-muted);
+  font-size: 0.8rem;
+  margin-left: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uir-tree__children {
+  list-style: none;
+  margin: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--uir-line);
+  margin-left: 18px;
+}
+
+.uir-tree__children--root {
+  padding: 4px 0 4px 20px;
+}
+
+.uir-tree__item {
+  margin: 0;
+}

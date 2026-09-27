@@ -151,6 +151,15 @@ async function runSubagent({
     }
   }
 
+  // Guard: chat_response with no real content (model returned an empty/near-empty answer).
+  // Show what was actually retrieved instead of an empty or raw-JSON bubble.
+  if (widget.type === 'chat_response' && !(widget.content || '').trim()) {
+    const uniqueFiles = Array.from(new Set((chunks || []).map(c => c.file_path).filter(Boolean)));
+    widget.content = uniqueFiles.length > 0
+      ? `I found relevant material in ${repoName || 'the repository'} but couldn't synthesize a full answer this time. Most relevant files:\n\n${uniqueFiles.slice(0, 8).map(f => `- \`${f}\``).join('\n')}\n\nTry rephrasing the question, or ask about one of these files directly.`
+      : `I wasn't able to produce an answer for "${query}" in ${repoName || 'the repository'} this time. Try rephrasing the question.`;
+  }
+
   // If this is an audio briefing subagent, synthesize the actual studio MP3 audio via ElevenLabs
   if (widget.type === 'audio_player' && widget.transcript) {
     emit(onThought, {

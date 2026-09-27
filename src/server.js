@@ -6,6 +6,7 @@ const PgSession = require('connect-pg-simple')(session);
 const config = require('./config/watsonx');
 const backendConfig = require('./config/backend');
 const { verifyAuth } = require('./services/watsonx/auth');
+const { getEmbeddingMode } = require('./services/watsonx/embedding');
 const queryRouter = require('./routes/query');
 const streamRouter = require('./routes/stream');
 const sessionRouter = require('./routes/session');
@@ -129,6 +130,15 @@ if (require.main === module) {
   repoStore.failOrphanedJobs()
     .then(n => n && console.log(`[startup] marked ${n} orphaned indexing job(s) as failed`))
     .catch(e => console.warn(`[startup] Postgres not ready: ${e.message}`))
+    .then(() => chroma.ping())
+    .then(vector => {
+      if (!vector || !vector.ok) {
+        console.warn(`[startup] ⚠️  ChromaDB unreachable at ${backendConfig.chromaApiKey ? 'Chroma Cloud' : backendConfig.chromaUrl}: ${vector && vector.error}`);
+        console.warn(`      Cloning/embedding will still run, but indexing and RAG queries will fail until it's reachable.`);
+        console.warn(`      Local dev: start it with \`npm run chroma\` in another terminal.`);
+      }
+    })
+    .catch(() => {})
     .finally(() => app.listen(PORT, () => {
     console.log(`===============================================`);
     console.log(`🚀 TRACiE Backend Service running on port ${PORT}`);
@@ -146,6 +156,12 @@ if (require.main === module) {
     if (!process.env.GITHUB_CLIENT_ID) {
       console.log(`   ⚠️  GITHUB_CLIENT_ID not set — OAuth login will return 503.`);
       console.log(`      Set GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET to enable GitHub OAuth.`);
+    }
+    const embeddingMode = getEmbeddingMode();
+    if (embeddingMode === 'huggingface') {
+      console.log(`   ℹ️  WATSONX_APIKEY/WATSONX_PROJECT_ID not set — embedding via HuggingFace Inference API (HF_TOKEN).`);
+    } else if (!embeddingMode) {
+      console.log(`   ⚠️  No WATSONX or HF_TOKEN credentials set — ingestion and RAG queries will fail until one is configured.`);
     }
     console.log(`===============================================`);
   }));

@@ -37,6 +37,16 @@ router.post('/query', async (req, res) => {
 
     return res.status(200).json(widget);
   } catch (error) {
+    if (error.code === 'REPO_NOT_READY') {
+      return res.status(409).json({
+        type: 'alert_card',
+        severity: 'warning',
+        title: 'Repository Not Ready',
+        message: error.message,
+        repositoryId: error.repositoryId,
+        indexStatus: error.indexStatus
+      });
+    }
     console.error('Error executing RAG query:', error);
     return res.status(500).json({
       type: 'alert_card',

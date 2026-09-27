@@ -344,10 +344,16 @@ function renderConnected() {
       var btn = e.currentTarget;
       btn.disabled = true;
       btn.textContent = '...';
-      fetch('/api/repos/' + id + '/reindex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-        .then(function(r) { return r.json(); })
+      // full:true forces every file to be re-chunked and re-embedded. Without it, an incremental
+      // reindex compares git blob SHAs and no-ops when nothing changed on GitHub — which made this
+      // button look broken (e.g. after switching embedding providers, when the repo itself hasn't changed).
+      fetch('/api/repos/' + id + '/reindex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ full: true }) })
+        .then(function(r) {
+          if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Reindex failed (' + r.status + ')'); });
+          return r.json();
+        })
         .then(function() {
-          btn.textContent = '&#x21BB;';
+          btn.innerHTML = '&#x21BB;';
           btn.disabled = false;
           // Update status and start polling
           const repo = state.connected.find(function(x) { return x.id === id; });
@@ -355,7 +361,11 @@ function renderConnected() {
           renderConnected();
           startIndexingPoller(id);
         })
-        .catch(function() { btn.textContent = '&#x21BB;'; btn.disabled = false; });
+        .catch(function(err) {
+          btn.innerHTML = '&#x21BB;';
+          btn.disabled = false;
+          alert('Reindex failed to start: ' + (err.message || 'unknown error'));
+        });
     });
 
     div.querySelector('button[data-url]').addEventListener('click', function(e) {

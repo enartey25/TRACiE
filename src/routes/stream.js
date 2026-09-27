@@ -61,11 +61,13 @@ async function handleStream(req, res) {
     res.end();
   } catch (error) {
     if (isClientConnected) {
+      const notReady = error.code === 'REPO_NOT_READY';
       sendEvent('error', {
         type: 'alert_card',
-        severity: 'error',
-        title: 'Streaming Error',
-        message: error.message
+        severity: notReady ? 'warning' : 'error',
+        title: notReady ? 'Repository Not Ready' : 'Streaming Error',
+        message: error.message,
+        ...(notReady ? { repositoryId: error.repositoryId, indexStatus: error.indexStatus } : {})
       });
       res.end();
     }

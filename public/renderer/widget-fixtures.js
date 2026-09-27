@@ -8,6 +8,13 @@ window.WIDGET_FIXTURES = {
 
   /* ================= CONTENT AND GUIDANCE ================= */
 
+  chat_response: {
+    // Real backend/schema shape (src/contracts/responseSchema.json): flat `content`, not `payload.body`.
+    type: 'chat_response',
+    content: 'The **RAG pipeline** retrieves the top-k relevant chunks, then grounds the answer in them.\n\nSee `src/services/rag/pipeline.js` for the orchestration.',
+    citations: [{ file: 'src/services/rag/pipeline.js', start: 39, end: 90 }],
+  },
+
   overview: {
     type: 'overview',
     message: 'Here is the high level architecture. I opened it in the canvas.',
@@ -70,6 +77,36 @@ window.WIDGET_FIXTURES = {
   directory_tree: {
     type: 'directory_tree',
     payload: { path: ['repository', 'backend', 'auth', 'session.ts'] },
+  },
+
+  // Real backend/schema shape for a "show me the directory structure" query
+  // (src/contracts/responseSchema.json #/definitions/file_tree; NavigatorSubagent).
+  // `file_tree` aliases to the `directory_tree` widget, which must handle both shapes.
+  file_tree: {
+    type: 'file_tree',
+    title: 'example/repo Repository Layout',
+    payload: {
+      root: {
+        name: 'example/repo',
+        type: 'directory',
+        children: [
+          {
+            name: 'src',
+            type: 'directory',
+            children: [
+              { name: 'index.ts', type: 'file', description: 'Entry point' },
+              {
+                name: 'services',
+                type: 'directory',
+                children: [{ name: 'auth.ts', type: 'file', description: 'Session handling' }],
+              },
+            ],
+          },
+          { name: 'README.md', type: 'file', description: 'Project overview' },
+          { name: 'empty-dir', type: 'directory', children: [] },
+        ],
+      },
+    },
   },
 
   code_snippet: {
