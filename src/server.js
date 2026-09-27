@@ -38,6 +38,9 @@ const path = require('path');
 
 const app = express();
 
+// Trust reverse proxy (Render, Cloudflare, etc.) so secure cookies work over HTTPS
+app.set('trust proxy', 1);
+
 // ── Session Middleware ────────────────────────────────────────────────────────
 // Sessions are stored in the existing Postgres database.
 // connect-pg-simple creates the "session" table automatically on first use.

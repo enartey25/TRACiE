@@ -28,7 +28,10 @@ router.get('/auth/github', (req, res) => {
     state: req.session.id   // CSRF protection
   });
 
-  res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
+  req.session.save((saveErr) => {
+    if (saveErr) console.warn('[auth/github] session save warning:', saveErr.message);
+    res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
+  });
 });
 
 /**
@@ -103,8 +106,11 @@ router.get('/auth/github/callback', async (req, res) => {
     const returnTo = req.session.returnTo || '/';
     delete req.session.returnTo;
 
-    // Redirect back to the app with success indicator
-    res.redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}gh_login=1`);
+    // Persist session before redirecting back to the app with success indicator
+    req.session.save((saveErr) => {
+      if (saveErr) console.warn('[auth/github] session save warning:', saveErr.message);
+      res.redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}gh_login=1`);
+    });
   } catch (err) {
     console.error('[auth/github] OAuth callback failed:', err.message);
     res.status(500).send(`
